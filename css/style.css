@@ -1,0 +1,345 @@
+/* Queendom — Playful Puzzle Game Styles */
+
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #333;
+  overflow-x: hidden;
+}
+
+/* ===== Header ===== */
+
+header {
+  width: 100%;
+  max-width: 700px;
+  padding: 20px;
+  text-align: center;
+}
+
+h1 {
+  font-family: 'Fredoka One', cursive;
+  font-size: 3rem;
+  color: #fff;
+  text-shadow: 3px 3px 0 rgba(0,0,0,0.2);
+  margin-bottom: 12px;
+  letter-spacing: 2px;
+}
+
+#controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+select, button {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+select {
+  background: #fff;
+  color: #333;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+}
+
+button {
+  background: linear-gradient(135deg, #f093fb, #f5576c);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(245,87,108,0.4);
+}
+
+button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(245,87,108,0.5);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+#btn-pause {
+  background: linear-gradient(135deg, #a8edea, #fed6e3);
+  color: #333;
+  box-shadow: 0 4px 12px rgba(168,237,234,0.4);
+}
+
+#status-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 30px;
+  font-size: 1.3rem;
+  color: #fff;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+}
+
+#lives {
+  font-size: 1.8rem;
+  letter-spacing: 4px;
+  transition: transform 0.2s;
+}
+
+#lives span {
+  display: inline-block;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+#lives.shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+#timer {
+  font-family: 'Fredoka One', cursive;
+  font-size: 1.5rem;
+  background: rgba(255,255,255,0.15);
+  padding: 4px 16px;
+  border-radius: 20px;
+}
+
+/* ===== Board ===== */
+
+main {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 10px auto;
+}
+
+.board-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.board {
+  display: grid;
+  gap: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 4px #fff;
+  width: min(75vmin, 560px);
+  height: min(75vmin, 560px);
+}
+
+.cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: filter 0.1s;
+  user-select: none;
+  -webkit-user-select: none;
+  aspect-ratio: 1;
+}
+
+.cell:hover {
+  filter: brightness(1.08);
+}
+
+/* Region borders — dark outline where regions meet */
+.border-top    { border-top: 3px solid #444; }
+.border-bottom { border-bottom: 3px solid #444; }
+.border-left   { border-left: 3px solid #444; }
+.border-right  { border-right: 3px solid #444; }
+
+/* Grid lines between cells (subtle) */
+.cell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(0,0,0,0.08);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Crown SVG in cell */
+.cell.has-queen svg {
+  width: 80%;
+  height: 80%;
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* X marks in cell */
+.cell.has-mark svg,
+.cell.has-dead svg {
+  width: 80%;
+  height: 80%;
+}
+
+.cell.has-dead svg {
+  animation: flashRed 0.5s ease-out;
+}
+
+@keyframes flashRed {
+  0% { filter: brightness(3); }
+  100% { filter: brightness(5); }
+}
+
+/* ===== Overlays ===== */
+
+.overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: 12px;
+  transition: opacity 0.3s;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+/* Pause overlay — obscures the board */
+.pause-overlay {
+  background: rgba(50, 50, 80, 0.92);
+  backdrop-filter: blur(4px);
+}
+
+.pause-overlay .overlay-content {
+  text-align: center;
+  color: #fff;
+}
+
+.pause-overlay h2 {
+  font-family: 'Fredoka One', cursive;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.pause-overlay p {
+  font-size: 1.1rem;
+  opacity: 0.8;
+  margin-bottom: 20px;
+}
+
+/* Win overlay */
+.game-win {
+  background: rgba(46, 204, 113, 0.9);
+}
+
+.game-win .overlay-content {
+  text-align: center;
+  color: #fff;
+}
+
+.game-win h2 {
+  font-family: 'Fredoka One', cursive;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.game-win p {
+  font-size: 1.2rem;
+  margin-bottom: 6px;
+}
+
+.game-win .time {
+  font-family: 'Fredoka One', cursive;
+  font-size: 2rem;
+  margin: 10px 0 20px;
+}
+
+/* Lose overlay */
+.game-lose {
+  background: rgba(231, 76, 60, 0.85);
+}
+
+.game-lose .overlay-content {
+  text-align: center;
+  color: #fff;
+}
+
+.game-lose h2 {
+  font-family: 'Fredoka One', cursive;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.game-lose p {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+/* ===== Solution Reveal (ghost queens) ===== */
+
+.solution-reveal {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--grid-size, 8), 1fr);
+  grid-template-rows: repeat(var(--grid-size, 8), 1fr);
+  pointer-events: none;
+  z-index: 5;
+  border-radius: 12px;
+}
+
+.solution-reveal.hidden {
+  display: none;
+}
+
+.ghost-queen svg {
+  width: 70%;
+  height: 70%;
+  opacity: 0.4;
+}
+
+/* ===== Footer ===== */
+
+footer {
+  padding: 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.85rem;
+}
+
+footer a {
+  color: rgba(255,255,255,0.8);
+  text-decoration: none;
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 600px) {
+  h1 { font-size: 2rem; }
+  .board { width: min(92vw, 560px); height: min(92vw, 560px); }
+  #controls { gap: 6px; }
+  select, button { padding: 6px 12px; font-size: 0.85rem; }
+}
