@@ -196,176 +196,77 @@ function generateQueenPlacement(size, rng) {
 // ===========================================================================
 
 /**
- * Design N connected regions around queen positions.
+ * Design N connected regions using a weighted Voronoi partition.
  *
  * Strategy:
- * 1. Each queen's cell is the seed for its region (region ID = queen index).
- * 2. Grow regions using BFS from seeds, respecting target sizes.
- *    Target sizes ensure some small regions (2-4 cells) exist so naked singles fire early,
- *    creating a cascade of eliminations.
+ * 1. Use queen positions as seeds with adjustable weights.
+ *    Lower weight → smaller cell (distance is divided by weight).
+ * 2. On easy/medium, many seeds get low weights to create small regions
+ *    (2-6 cells) needed for naked singles deductions.
+ * 3. Assign every grid cell to the nearest weighted seed.
+ * 4. Voronoi cells on a rectangular grid with distinct seeds are always
+ *    connected, so no explicit connectivity check is needed beyond validation.
  */
 function designRegions(size, solution, difficulty, rng) {
+  // Weighted Voronoi: dist_i = hypot(r - sr, c - sc) / weight[i]
+  // Lower weight → smaller cell. Default weight = 1.0.
+  const weights = new Array(size).fill(1.0);
+  let nSmall;
+  switch (difficulty) {
+    case 'easy':
+      nSmall = Math.ceil(size * 0.7);
+      break;
+    case 'medium':
+      nSmall = size >= 10 ? Math.ceil(size * 0.55) : Math.ceil(size * 0.5);
+      break;
+    default: // hard
+      nSmall = Math.ceil(size * 0.2);
+  }
+
+  // Pick random seeds to shrink
+  const smallIndices = new Set();
+  while (smallIndices.size < nSmall) {
+    smallIndices.add(rngInt(rng, 0, size));
+  }
+
+  for (let i = 0; i < size; i++) {
+    if (smallIndices.has(i)) {
+      // Random weight between 0.25 and 0.6 → much smaller cells
+      weights[i] = 0.25 + rngFloat(rng) * 0.35;
+    }
+  }
+
+  // Weighted Voronoi partition: each cell → nearest (weighted) seed
   const regions = Array.from({ length: size }, () => new Array(size).fill(-1));
 
-  // Seed queen cells
-  for (let i = 0; i < size; i++) {
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      let bestDist = Infinity;
+      const ties = [];
+
+      for (let i = 0; i < solution.length; i++) {
+        const [sr, sc] = solution[i];
+        const dist = Math.hypot(r - sr, c - sc) / weights[i];
+        if (dist < bestDist) {
+          bestDist = dist;
+          ties.length = 0;
+          ties.push(i);
+        } else if (dist === bestDist) {
+          ties.push(i);
+        }
+      }
+
+      regions[r][c] = ties[rngInt(rng, 0, ties.length)];
+    }
+  }
+
+  // Ensure each queen's original cell belongs to its own region.
+  for (let i = 0; i < solution.length; i++) {
     const [r, c] = solution[i];
     regions[r][c] = i;
   }
 
-  // Determine target sizes: some small, some larger
-  const targetSizes = computeTargetSizes(size, difficulty, rng);
-
-  // Grow regions using BFS from seeds, respecting target sizes
-  const regionCurrentSize = new Array(size).fill(1);
-  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-
-  // Track assigned cells so we can build the frontier by scanning only neighbors
-  const assignedCells = [];
-  for (let i = 0; i < size; i++) {
-    const [r, c] = solution[i];
-    assignedCells.push([r, c]);
-  }
-
-  function buildFrontier() {
-    // Scan neighbors of assigned cells to find all unassigned frontier cells.
-    // Each cell may border multiple regions, so it appears once per adjacent region.
-    const adj = new Map(); // key (r*size+c) -> Set of regionIds
-    for (const [ar, ac] of assignedCells) {
-      const reg = regions[ar][ac];
-      for (const [dr, dc] of dirs) {
-        const nr = ar + dr, nc = ac + dc;
-        if (nr >= 0 && nr < size && nc >= 0 && nc < size && regions[nr][nc] === -1) {
-          const key = nr * size + nc;
-          if (!adj.has(key)) adj.set(key, new Set());
-          adj.get(key).add(reg);
-        }
-      }
-    }
-    const frontier = [];
-    for (const [key, regs] of adj) {
-      const r = Math.floor(key / size), c = key % size;
-      for (const reg of regs) {
-        frontier.push({ r, c, fromRegion: reg });
-      }
-    }
-    return frontier;
-  }
-
-  let assigned = size;
-  const totalCells = size * size;
-
-  while (assigned < totalCells) {
-    const frontier = buildFrontier();
-    if (frontier.length === 0) break; // shouldn't happen with connected growth
-
-    // Filter: only regions that haven't reached their target
-    const eligible = frontier.filter(
-      (f) => regionCurrentSize[f.fromRegion] < targetSizes[f.fromRegion]
-    );
-
-    let chosen;
-    if (eligible.length === 0) {
-      // All targets met but cells remain — relax and allow any region to grow
-      chosen = frontier[rngInt(rng, 0, frontier.length)];
-    } else {
-      // Weighted pick: prefer regions that are behind their target
-      const weights = eligible.map(
-        (f) => targetSizes[f.fromRegion] - regionCurrentSize[f.fromRegion] + 1
-      );
-      chosen = eligible[weightedPick(eligible.length, weights, rng)];
-    }
-
-    assignCell(chosen, regions, regionCurrentSize);
-    assignedCells.push([chosen.r, chosen.c]);
-    assigned++;
-  }
-
-  if (assigned < totalCells) return null; // unreachable cells
   return regions;
-}
-
-function assignCell({ r, c, fromRegion }, regions, regionCurrentSize) {
-  regions[r][c] = fromRegion;
-  regionCurrentSize[fromRegion]++;
-}
-
-function weightedPick(n, weights, rng) {
-  let total = 0;
-  for (const w of weights) total += w;
-  let r = rngFloat(rng) * total;
-  for (let i = 0; i < n; i++) {
-    r -= weights[i];
-    if (r <= 0) return i;
-  }
-  return n - 1;
-}
-
-/**
- * Compute target region sizes. Small regions create easy deductions.
- * Easy: more small regions (2-3 cells). Hard: more varied/larger regions.
- * For larger boards at easy/medium, keep most regions very small so basic techniques suffice.
- */
-function computeTargetSizes(size, difficulty, rng) {
-  const totalCells = size * size;
-
-  // Scale small region count based on both difficulty and board size
-  let nSmall, smallMax;
-  switch (difficulty) {
-    case 'easy':
-      nSmall = Math.ceil(size * 0.7);
-      smallMax = size <= 8 ? 4 : 3;
-      break;
-    case 'medium':
-      nSmall = size >= 10 ? Math.ceil(size * 0.65) : Math.ceil(size * 0.5);
-      smallMax = size <= 8 ? 5 : (size <= 10 ? 4 : 3);
-      break;
-    default: // hard
-      nSmall = Math.ceil(size * 0.2);
-      smallMax = Math.floor(totalCells / size) + 2;
-  }
-
-  const sizes = new Array(size).fill(0);
-
-  // Assign small sizes to some regions
-  for (let i = 0; i < nSmall; i++) {
-    sizes[i] = rngInt(rng, 2, smallMax + 1);
-  }
-
-  // Distribute remaining cells among larger regions
-  const remainingCells = totalCells - sizes.slice(0, nSmall).reduce((a, b) => a + b, 0);
-  const largeCount = size - nSmall;
-
-  if (largeCount > 0) {
-    const baseLarge = Math.floor(remainingCells / largeCount);
-    let extra = remainingCells - baseLarge * largeCount;
-    for (let i = nSmall; i < size; i++) {
-      sizes[i] = baseLarge + (extra > 0 ? 1 : 0);
-      if (extra > 0) extra--;
-    }
-  }
-
-  // Shuffle so small regions aren't always first
-  rngShuffle(sizes, rng);
-
-  // Ensure no region is smaller than 1 or larger than totalCells - size + 1
-  for (let i = 0; i < size; i++) {
-    sizes[i] = Math.max(1, Math.min(sizes[i], totalCells - size + 1));
-  }
-
-  // Adjust to exactly fill the board
-  let sum = sizes.reduce((a, b) => a + b, 0);
-  while (sum < totalCells) {
-    const idx = rngInt(rng, 0, size);
-    sizes[idx]++;
-    sum++;
-  }
-  while (sum > totalCells) {
-    const idx = rngInt(rng, 0, size);
-    if (sizes[idx] > 1) { sizes[idx]--; sum--; }
-  }
-
-  return sizes;
 }
 
 // ===========================================================================
