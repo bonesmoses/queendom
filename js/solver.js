@@ -212,43 +212,69 @@ export function applyPigeonhole(state) {
   const unplaced = [];
   for (let i = 0; i < state.size; i++) if (!state.placed.has(i)) unplaced.push(i);
 
+  // Precompute row/col sets per region to avoid repeated cellPos() calls
+  const regRows = new Map(), regCols = new Map();
+  for (const regId of unplaced) {
+    const rows = new Set(), cols = new Set();
+    for (const key of state.candidates[regId]) {
+      const [r, c] = cellPos(key);
+      rows.add(r); cols.add(c);
+    }
+    regRows.set(regId, rows); regCols.set(regId, cols);
+  }
+
   // Row groupings: K regions confined to ≤K rows → they own those rows
-  for (let k = 2; k <= Math.min(unplaced.length, 6); k++) {
+  // Cap k at 3 — higher-order combos are exponentially expensive and rarely useful.
+  const maxK = Math.min(3, unplaced.length);
+  for (let k = 2; k <= maxK; k++) {
     for (const combo of combinations(unplaced, k)) {
+      // Fast prune: if any region already spans >k rows, this combo can't confine
+      let dominated = false;
+      for (const regId of combo) {
+        if (regRows.get(regId).size > k) { dominated = true; break; }
+      }
+      if (dominated) continue;
+
       const rowSet = new Set();
       for (const regId of combo) {
-        for (const key of state.candidates[regId]) rowSet.add(cellPos(key)[0]);
+        for (const r of regRows.get(regId)) rowSet.add(r);
       }
-      if (rowSet.size <= k && rowSet.size >= 1) {
-        // These regions own these rows — eliminate other regions from them
-        const regSet = new Set(combo);
-        for (const r of rowSet) {
-          for (let regId = 0; regId < state.size; regId++) {
-            if (state.placed.has(regId) || regSet.has(regId)) continue;
-            for (const key of getCandsInRow(state.candidates[regId], r)) {
-              if (state.candidates[regId].delete(key)) changed = true;
-            }
+      // Prune: union already exceeds k
+      if (rowSet.size > k || rowSet.size < 1) continue;
+
+      const regSet = new Set(combo);
+      for (const r of rowSet) {
+        for (let regId = 0; regId < state.size; regId++) {
+          if (state.placed.has(regId) || regSet.has(regId)) continue;
+          for (const key of getCandsInRow(state.candidates[regId], r)) {
+            if (state.candidates[regId].delete(key)) changed = true;
           }
         }
       }
     }
   }
 
-  // Column groupings
-  for (let k = 2; k <= Math.min(unplaced.length, 6); k++) {
+  // Column groupings — same strategy
+  for (let k = 2; k <= maxK; k++) {
     for (const combo of combinations(unplaced, k)) {
+      let dominated = false;
+      for (const regId of combo) {
+        if (regCols.get(regId).size > k) { dominated = true; break; }
+      }
+      if (dominated) continue;
+
       const colSet = new Set();
       for (const regId of combo) {
-        for (const key of state.candidates[regId]) colSet.add(cellPos(key)[1]);
+        for (const c of regCols.get(regId)) colSet.add(c);
       }
-      if (colSet.size <= k && colSet.size >= 1) {
-        const regSet = new Set(combo);
-        for (const c of colSet) {
-          for (let regId = 0; regId < state.size; regId++) {
-            if (state.placed.has(regId) || regSet.has(regId)) continue;
-            for (const key of getCandsInCol(state.candidates[regId], c)) {
-              if (state.candidates[regId].delete(key)) changed = true;
-            }
+      if (colSet.size > k || colSet.size < 1) continue;
+
+      const regSet = new Set(combo);
+      for (const c of colSet) {
+        for (let regId = 0; regId < state.size; regId++) {
+          if (state.placed.has(regId) || regSet.has(regId)) continue;
+          for (const key of getCandsInCol(state.candidates[regId], c)) {
+            if (state.candidates[regId].delete(key)) changed = true;
           }
         }
       }
@@ -270,14 +296,12 @@ export function applyPigeonhole(state) {
     for (let i = 0; i < cells.length; i++) {
       const regs1 = new Set(cellToRegs.get(cells[i]));
       if (regs1.size !== k) continue;
-      // Find other cells with exactly the same regions
       const sharedCells = [cells[i]];
       for (let j = i + 1; j < cells.length; j++) {
         if (setsEqual(regs1, new Set(cellToRegs.get(cells[j])))) {
           sharedCells.push(cells[j]);
         }
       }
-      // Eliminate these cells from non-member regions
       for (const key of sharedCells) {
         for (let regId = 0; regId < state.size; regId++) {
           if (state.placed.has(regId) || regs1.has(regId)) continue;
@@ -439,19 +463,25 @@ export function applyForcingChains(state) {
     }
   }
 
-  if (bestReg === -1 || bestCount > 8) return { changed, contradiction: false };
+  // Tighten threshold: only attempt forcing when candidate set is small
+  if (bestReg === -1 || bestCount > 7) return { changed, contradiction: false };
 
-  for (const candKey of [...state.candidates[bestReg]]) {
+  // Only test up to 6 candidates — testing all is expensive and diminishing returns
+  const cands = [...state.candidates[bestReg]].slice(0, 6);
+  for (const candKey of cands) {
     const clone = cloneState(state);
     clone.placed.set(bestReg, candKey);
     applyBasicElimination(clone);
+    if (isContradiction(clone)) {
+      if (state.candidates[bestReg].delete(candKey)) changed = true;
+      continue;
+    }
 
     let cChanged = true, stalls = 0;
-    while (cChanged && !isContradiction(clone) && !isSolved(clone) && stalls < 4) {
+    while (cChanged && !isContradiction(clone) && stalls < 3) {
       cChanged = false;
-      const techniques = [applyNakedSingles, applyHiddenSingles, applyRegionConfinement,
-                          applyPigeonhole, applyAdjacencyBlocking, applyRowColIntersection];
-      for (const fn of techniques) {
+      for (const fn of [applyNakedSingles, applyHiddenSingles, applyRegionConfinement,
+                        applyPigeonhole, applyAdjacencyBlocking, applyRowColIntersection]) {
         const r = fn(clone);
         if (r.changed) cChanged = true;
         if (r.contradiction) break;
@@ -493,6 +523,7 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
     const elimResult = applyBasicElimination(state);
     if (elimResult.changed) changed = true;
     if (elimResult.contradiction) return { solved: false, placements: null };
+    if (isSolved(state)) break; // early exit after basic elimination solves it
 
     // Run techniques up to maxTechnique (1=none beyond basic, 8=all)
     const techLimit = Math.min(maxTechnique - 1, TECHNIQUES.length);
@@ -506,7 +537,7 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
       if (result.contradiction) return { solved: false, placements: null };
     }
 
-    if (!changed) { stalls++; if (stalls >= 2) break; }
+    if (!changed) { stalls++; if (stalls >= 3) break; }
     else stalls = 0;
   }
 

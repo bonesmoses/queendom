@@ -237,21 +237,25 @@ function designRegions(size, solution, difficulty, rng) {
   }
 
   // Weighted Voronoi partition: each cell → nearest (weighted) seed
+  // Use squared distance / weight² to avoid Math.hypot() — same ordering, much faster.
+  const wSq = new Array(size);
+  for (let i = 0; i < size; i++) wSq[i] = weights[i] * weights[i];
+
   const regions = Array.from({ length: size }, () => new Array(size).fill(-1));
 
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
-      let bestDist = Infinity;
+      let bestDist2 = Infinity;
       const ties = [];
 
       for (let i = 0; i < solution.length; i++) {
-        const [sr, sc] = solution[i];
-        const dist = Math.hypot(r - sr, c - sc) / weights[i];
-        if (dist < bestDist) {
-          bestDist = dist;
+        const dr = r - solution[i][0], dc = c - solution[i][1];
+        const dist2 = (dr * dr + dc * dc) / wSq[i];
+        if (dist2 < bestDist2) {
+          bestDist2 = dist2;
           ties.length = 0;
           ties.push(i);
-        } else if (dist === bestDist) {
+        } else if (dist2 === bestDist2) {
           ties.push(i);
         }
       }
@@ -342,21 +346,20 @@ function isRegionConnected(regions, size, regionId) {
   if (count === 0 || startR === -1) return false;
 
   const visited = Array.from({ length: size }, () => new Array(size).fill(false));
-  const queue = [[startR, startC]];
+  // Use index-based queue instead of array.shift() which is O(n)
+  const queue = [startR, startC];
   visited[startR][startC] = true;
   let reached = 0;
-  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  let head = 0;
 
-  while (queue.length > 0) {
-    const [r, c] = queue.shift();
+  while (head < queue.length) {
+    const r = queue[head++], c = queue[head++];
     reached++;
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr, nc = c + dc;
-      if (nr >= 0 && nr < size && nc >= 0 && nc < size && !visited[nr][nc] && regions[nr][nc] === regionId) {
-        visited[nr][nc] = true;
-        queue.push([nr, nc]);
-      }
-    }
+    // Inline neighbor checks for speed
+    if (r > 0 && !visited[r-1][c] && regions[r-1][c] === regionId) { visited[r-1][c] = true; queue.push(r-1, c); }
+    if (r < size-1 && !visited[r+1][c] && regions[r+1][c] === regionId) { visited[r+1][c] = true; queue.push(r+1, c); }
+    if (c > 0 && !visited[r][c-1] && regions[r][c-1] === regionId) { visited[r][c-1] = true; queue.push(r, c-1); }
+    if (c < size-1 && !visited[r][c+1] && regions[r][c+1] === regionId) { visited[r][c+1] = true; queue.push(r, c+1); }
   }
 
   return reached === count;
