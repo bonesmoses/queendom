@@ -199,7 +199,7 @@ export class Renderer {
   _updateOverlays() {
     const pauseOverlay = document.getElementById('pause-overlay');
     const gameOverOverlay = document.getElementById('game-over-overlay');
-    const solutionReveal = document.getElementById('solution-reveal');
+    const solutionOverlay = document.getElementById('solution-overlay');
 
     if (this.game.status === Status.WON) {
       if (gameOverOverlay) {
@@ -215,30 +215,38 @@ export class Renderer {
         if (btn && this.onNewGame) btn.addEventListener('click', () => this.onNewGame());
       }
       if (pauseOverlay) pauseOverlay.className = 'overlay hidden';
+      if (solutionOverlay) solutionOverlay.className = 'solution-overlay hidden';
     } else if (this.game.status === Status.LOST) {
-      // Show solution reveal on the board
-      if (solutionReveal) {
-        solutionReveal.className = 'solution-reveal';
-        this._renderSolutionReveal(solutionReveal);
-      }
+      // Hide solution overlay by default — user opens with "Show Solution"
+      if (solutionOverlay) solutionOverlay.className = 'solution-overlay hidden';
       if (gameOverOverlay) {
         gameOverOverlay.className = 'overlay game-lose';
         gameOverOverlay.innerHTML = `
           <div class="overlay-content">
             <h2>Game Over</h2>
             <p>You ran out of lives!</p>
+            <button id="btn-show-solution">Show Solution</button>
             <button id="btn-new-game-lose">New Game</button>
           </div>`;
+        const showBtn = gameOverOverlay.querySelector('#btn-show-solution');
+        if (showBtn) {
+          showBtn.addEventListener('click', () => {
+            this._renderSolutionRevealInner();
+            // Swap: hide game-over, show solution
+            gameOverOverlay.className = 'overlay hidden';
+            solutionOverlay.className = 'solution-overlay';
+          });
+        }
         const btn = gameOverOverlay.querySelector('#btn-new-game-lose');
         if (btn && this.onNewGame) btn.addEventListener('click', () => {
-          solutionReveal.className = 'solution-reveal hidden';
+          solutionOverlay.className = 'solution-overlay hidden';
           this.onNewGame();
         });
       }
     } else {
       // Playing — hide overlays
       if (gameOverOverlay) gameOverOverlay.className = 'overlay hidden';
-      if (solutionReveal) solutionReveal.className = 'solution-reveal hidden';
+      if (solutionOverlay) solutionOverlay.className = 'solution-overlay hidden';
     }
 
     // Pause state
@@ -248,18 +256,47 @@ export class Renderer {
     }
   }
 
-  _renderSolutionReveal(container) {
-    // Render ghost queens at solution positions as an overlay on the board
-    container.innerHTML = '';
-    for (const [r, c] of this.game.solution) {
-      const ghostCell = document.createElement('div');
-      ghostCell.className = 'ghost-queen';
-      ghostCell.style.gridRow = r + 1;
-      ghostCell.style.gridColumn = c + 1;
-      ghostCell.innerHTML = QUEEN_SVG.replace('fill="#FFD700"', 'fill="rgba(255,215,0,0.35)"');
-      container.appendChild(ghostCell);
+  _renderSolutionRevealInner() {
+    // Render solution queens directly on the board cells — no separate grid,
+    // so alignment is perfect. The overlay itself is just a dimming backdrop.
+    const size = this.game.size;
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (this.game.solution.some(([sr, sc]) => sr === r && sc === c)) {
+          const cell = this.cellEls[r][c];
+          // Save existing content so we can restore it later
+          if (!cell.dataset._savedContent) {
+            cell.dataset._savedContent = cell.innerHTML;
+          }
+          cell.innerHTML = QUEEN_SVG;
+          cell.classList.add('has-queen');
+        }
+      }
     }
-    container.className = 'solution-reveal';
+
+    // Wire up close button
+    const closeBtn = document.querySelector('#solution-overlay .close-btn');
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        this._clearSolutionQueens();
+        document.getElementById('solution-overlay').className = 'solution-overlay hidden';
+        // Restore game-over overlay
+        const gameOverOverlay = document.getElementById('game-over-overlay');
+        if (gameOverOverlay) gameOverOverlay.className = 'overlay game-lose';
+      };
+    }
+  }
+
+  _clearSolutionQueens() {
+    // Restore cells to their pre-solution state
+    for (const cell of this.cellEls.flat()) {
+      if (cell.dataset._savedContent !== undefined) {
+        cell.innerHTML = cell.dataset._savedContent;
+        cell.classList.remove('has-queen');
+        delete cell.dataset._savedContent;
+      }
+    }
   }
 
   setGame(game) {

@@ -28,9 +28,6 @@
   <div class="board-wrapper">
     <div id="board-container"></div>
 
-    <!-- Solution reveal overlay (ghost queens on loss) -->
-    <div id="solution-reveal" class="solution-reveal hidden"></div>
-
     <!-- Pause overlay — obscures the board -->
     <div id="pause-overlay" class="overlay hidden">
       <div class="overlay-content">
@@ -42,6 +39,11 @@
 
     <!-- Game over overlay (win or lose) -->
     <div id="game-over-overlay" class="overlay hidden"></div>
+
+    <!-- Solution overlay — close button only; queens render on real board cells -->
+    <div id="solution-overlay" class="solution-overlay hidden">
+      <button class="close-btn" aria-label="Close">&times;</button>
+    </div>
   </div>
 </main>
 

@@ -279,12 +279,12 @@ main {
 
 /* Lose overlay */
 .game-lose {
-  background: rgba(231, 76, 60, 0.85);
+  background: rgba(200, 200, 200, 0.92);
 }
 
 .game-lose .overlay-content {
   text-align: center;
-  color: #fff;
+  color: #333;
 }
 
 .game-lose h2 {
@@ -298,27 +298,44 @@ main {
   margin-bottom: 20px;
 }
 
-/* ===== Solution Reveal (ghost queens) ===== */
 
-.solution-reveal {
+
+/* ===== Solution Overlay (close button only — queens render on real cells) ===== */
+
+.solution-overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  display: grid;
-  grid-template-columns: repeat(var(--grid-size, 8), 1fr);
-  grid-template-rows: repeat(var(--grid-size, 8), 1fr);
-  pointer-events: none;
-  z-index: 5;
+  z-index: 20;
   border-radius: 12px;
+  background: rgba(230, 230, 230, 0.85);
 }
 
-.solution-reveal.hidden {
+.solution-overlay.hidden {
   display: none;
 }
 
-.ghost-queen svg {
-  width: 70%;
-  height: 70%;
-  opacity: 0.4;
+.close-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: #333;
+  background: rgba(255, 255, 255, 0.7);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.95);
 }
 
 /* ===== Footer ===== */

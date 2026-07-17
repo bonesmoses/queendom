@@ -63,11 +63,6 @@ function startNewGame() {
   const boardContainer = document.getElementById('board-container');
   renderer = new Renderer(game, boardContainer);
 
-  // Set grid size CSS variable for solution reveal overlay
-  const solutionReveal = document.getElementById('solution-reveal');
-  solutionReveal.style.setProperty('--grid-size', size);
-  solutionReveal.className = 'solution-reveal hidden';
-
   // Wire renderer callbacks
   renderer.onToggleMark = (row, col) => {
     toggleMark(game, row, col);
@@ -126,7 +121,7 @@ function resumeFromPause() {
 function hideAllOverlays() {
   document.getElementById('pause-overlay').className = 'overlay hidden';
   document.getElementById('game-over-overlay').className = 'overlay hidden';
-  document.getElementById('solution-reveal').className = 'solution-reveal hidden';
+  document.getElementById('solution-overlay').className = 'solution-overlay hidden';
   document.getElementById('btn-pause').textContent = 'Pause';
 }
 
