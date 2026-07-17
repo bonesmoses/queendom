@@ -7,6 +7,28 @@ let game;
 let renderer;
 let timerInterval = null;
 
+/**
+ * Serialize the current board to a compact JSON string and copy to clipboard.
+ * Format: { size, difficulty, regions (row-major), solution ([r,c] pairs) }
+ */
+function copyBoardDefinition() {
+  if (!game) return;
+
+  const definition = JSON.stringify({
+    size: game.size,
+    difficulty: game.difficulty,
+    regions: game.regions.map(row => row.join(' ')),
+    solution: [...game.solution],
+  });
+
+  navigator.clipboard.writeText(definition).then(() => {
+    const btn = document.getElementById('btn-copy-board');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
 function init() {
   const boardContainer = document.getElementById('board-container');
   const sizeSelect = document.getElementById('size-select');
@@ -34,6 +56,7 @@ function init() {
   document.getElementById('btn-new-game').addEventListener('click', startNewGame);
   document.getElementById('btn-pause').addEventListener('click', togglePause);
   document.getElementById('btn-resume').addEventListener('click', resumeFromPause);
+  document.getElementById('btn-copy-board').addEventListener('click', copyBoardDefinition);
 
   sizeSelect.addEventListener('change', startNewGame);
   difficultySelect.addEventListener('change', startNewGame);
