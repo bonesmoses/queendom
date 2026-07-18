@@ -393,10 +393,27 @@ main {
 /* ===== Footer ===== */
 
 footer {
-  padding: 20px;
+  padding: 18px 20px 24px;
   text-align: center;
-  color: rgba(255,255,255,0.6);
-  font-size: 0.85rem;
+}
+
+.footer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footer-line-1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  line-height: 1.5;
+}
+
+.footer-line-2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
 }
 
 footer a {
