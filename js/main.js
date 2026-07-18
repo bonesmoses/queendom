@@ -7,6 +7,11 @@ let game;
 let renderer;
 let timerInterval = null;
 
+/** Check if ?debug=1 is in the URL query string. */
+function isDebugMode() {
+  return new URLSearchParams(window.location.search).get('debug') === '1';
+}
+
 /**
  * Serialize the current board to a compact JSON string and copy to clipboard.
  * Format: { size, difficulty, regions (row-major), solution ([r,c] pairs) }
@@ -53,10 +58,15 @@ function init() {
   }
 
   // Button handlers
+  const btnCopy = document.getElementById('btn-copy-board');
+  if (isDebugMode()) {
+    btnCopy.hidden = false;
+    btnCopy.addEventListener('click', copyBoardDefinition);
+  }
+
   document.getElementById('btn-new-game').addEventListener('click', startNewGame);
   document.getElementById('btn-pause').addEventListener('click', togglePause);
   document.getElementById('btn-resume').addEventListener('click', resumeFromPause);
-  document.getElementById('btn-copy-board').addEventListener('click', copyBoardDefinition);
   document.getElementById('btn-retry').addEventListener('click', startNewGame);
 
   sizeSelect.addEventListener('change', startNewGame);
