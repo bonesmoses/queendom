@@ -79,45 +79,58 @@ function startNewGame() {
   // Stop old timer
   if (timerInterval) clearInterval(timerInterval);
 
-  // Create new game
-  game = createGame(size, difficulty);
+  // Show loading overlay — yield to browser so it paints before blocking
+  showLoadingOverlay();
+  setTimeout(() => {
+    // Create new game (may block for a while on larger boards)
+    game = createGame(size, difficulty);
+    hideLoadingOverlay();
 
-  // Setup renderer
-  const boardContainer = document.getElementById('board-container');
-  renderer = new Renderer(game, boardContainer);
+    // Setup renderer
+    const boardContainer = document.getElementById('board-container');
+    renderer = new Renderer(game, boardContainer);
 
-  // Wire renderer callbacks
-  renderer.onToggleMark = (row, col) => {
-    toggleMark(game, row, col);
+    // Wire renderer callbacks
+    renderer.onToggleMark = (row, col) => {
+      toggleMark(game, row, col);
+      updateLives();
+    };
+    renderer.onPlaceQueen = (row, col) => {
+      const result = placeQueen(game, row, col);
+      if (!result.ok && game.lives < 3) {
+        // Animate lives shake on life loss
+        const livesEl = document.getElementById('lives');
+        livesEl.classList.add('shake');
+        setTimeout(() => livesEl.classList.remove('shake'), 600);
+      }
+      updateLives();
+    };
+    renderer.onNewGame = startNewGame;
+
+    // Hide all overlays
+    hideAllOverlays();
+
+    // Update UI
     updateLives();
-  };
-  renderer.onPlaceQueen = (row, col) => {
-    const result = placeQueen(game, row, col);
-    if (!result.ok && game.lives < 3) {
-      // Animate lives shake on life loss
-      const livesEl = document.getElementById('lives');
-      livesEl.classList.add('shake');
-      setTimeout(() => livesEl.classList.remove('shake'), 600);
-    }
-    updateLives();
-  };
-  renderer.onNewGame = startNewGame;
-
-  // Hide all overlays
-  hideAllOverlays();
-
-  // Update UI
-  updateLives();
-  updateTimerDisplay();
-
-  // Start timer
-  game.timerRunning = true;
-  timerInterval = setInterval(() => {
-    tickTimer(game);
     updateTimerDisplay();
+
+    // Start timer
+    game.timerRunning = true;
+    timerInterval = setInterval(() => {
+      tickTimer(game);
+      updateTimerDisplay();
   }, 1000);
 
-  renderer.render();
+    renderer.render();
+  });
+}
+
+function showLoadingOverlay() {
+  document.getElementById('loading-overlay').className = 'overlay loading-overlay';
+}
+
+function hideLoadingOverlay() {
+  document.getElementById('loading-overlay').className = 'overlay hidden';
 }
 
 function togglePause() {

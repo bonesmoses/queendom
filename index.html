@@ -41,6 +41,13 @@
     <!-- Game over overlay (win or lose) -->
     <div id="game-over-overlay" class="overlay hidden"></div>
 
+    <!-- Loading overlay — shown while a puzzle is being generated -->
+    <div id="loading-overlay" class="overlay loading-overlay hidden">
+      <div class="overlay-content">
+        <h2>Building Puzzle<span class="dot">.</span><span class="dot" style="animation-delay:0.2s">.</span><span class="dot" style="animation-delay:0.4s">.</span></h2>
+      </div>
+    </div>
+
     <!-- Solution overlay — close button only; queens render on real board cells -->
     <div id="solution-overlay" class="solution-overlay hidden">
       <button class="close-btn" aria-label="Close">&times;</button>

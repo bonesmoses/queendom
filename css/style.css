@@ -338,6 +338,34 @@ main {
   background: rgba(255, 255, 255, 0.95);
 }
 
+/* ===== Loading Overlay (Building Puzzle) ===== */
+
+.loading-overlay {
+  background: rgba(50, 50, 80, 0.92);
+  backdrop-filter: blur(4px);
+}
+
+.loading-overlay .overlay-content {
+  text-align: center;
+  color: #fff;
+}
+
+.loading-overlay h2 {
+  font-family: 'Fredoka One', cursive;
+  font-size: 2.5rem;
+}
+
+/* Animated bouncing dots */
+.dot {
+  animation: dot-pulse 1.4s infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 20%   { opacity: 0; }
+  35%, 65%  { opacity: 1; }
+  80%, 100% { opacity: 0; }
+}
+
 /* ===== Footer ===== */
 
 footer {
