@@ -390,8 +390,13 @@ export function applyRowColIntersection(state) {
     for (const key of state.candidates[regId]) {
       const [r, c] = cellPos(key);
       rowCount.set(r, (rowCount.get(r) || 0) + 1);
-      if (rowCount.get(r) === 1) rowSingleCell.set(r, key);
       colCount.set(c, (colCount.get(c) || 0) + 1);
+    }
+
+    // Only record rows/cols where this region has exactly one candidate
+    for (const key of state.candidates[regId]) {
+      const [r, c] = cellPos(key);
+      if (rowCount.get(r) === 1) rowSingleCell.set(r, key);
       if (colCount.get(c) === 1) colSingleCell.set(c, key);
     }
 
