@@ -125,11 +125,31 @@ button:active {
   border-radius: 20px;
 }
 
+/* ===== Rules Box ===== */
+
+.rules-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rule-cell {
+  background: rgba(255, 255, 255, 0.9);
+  color: #444;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 20px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
 /* ===== Board ===== */
 
 main {
   position: relative;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   margin: 10px auto;
@@ -414,6 +434,30 @@ footer {
   font-size: 1rem;
   font-weight: 700;
   color: rgba(255,255,255,0.85);
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 16px;
+  border-radius: 25px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.1s, background 0.15s;
+}
+
+.github-link:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.gh-icon {
+  display: inline-block;
 }
 
 footer a {

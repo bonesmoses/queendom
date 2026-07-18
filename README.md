@@ -1,6 +1,16 @@
 # ♛ Queendom
 
-A browser puzzle game: place N queens on an NxN grid divided into N colored regions. One queen per region, no two queens share a row or column, and no two queens are adjacent. Boards are algorithmically generated and guaranteed to be solvable through logical deduction alone — no guessing required.
+Do you want to play the LinkedIn Queens game, but don't want to settle for one measly puzzle per day? Now, through the power of AI slop, you can!
+
+Queendom is a browser-based game with three simple rules:
+
+1. One queen per color.
+2. One queen per row or column.
+3. Queens can't touch.
+
+Board sizes range from 6x6 to 12x12, with three difficulty levels so everyone can enjoy. Additionally, this version of the game uses procedural board generation, and uses a logical solver to double-check results, so it's essentially infinite games for everyone with no guessing required!
+
+How great is that?!
 
 ## How to Play
 
