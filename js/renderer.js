@@ -89,7 +89,7 @@ export class Renderer {
   }
 
   _attachClickHandlers() {
-    const CLICK_DELAY = 250; // ms to wait before treating as single click
+    const CLICK_DELAY = 200; // ms to wait before treating as single click
 
     this.boardEl.addEventListener('click', (e) => {
       const cell = e.target.closest('.cell');
@@ -139,6 +139,10 @@ export class Renderer {
   }
 
   _onDoubleClick(row, col) {
+    // Ignore double-click on cells that already have a queen
+    const key = cellKey(row, col);
+    if (this.game.queens.has(key)) return;
+
     const callback = this.onPlaceQueen;
     if (callback) callback(row, col);
     this.renderCell(row, col);
