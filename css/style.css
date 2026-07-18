@@ -338,6 +338,30 @@ main {
   background: rgba(255, 255, 255, 0.95);
 }
 
+/* ===== Build Failed Overlay ===== */
+
+.build-fail-overlay {
+  background: rgba(50, 50, 80, 0.92);
+  backdrop-filter: blur(4px);
+}
+
+.build-fail-overlay .overlay-content {
+  text-align: center;
+  color: #fff;
+}
+
+.fail-icon {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 16px;
+}
+
+.build-fail-overlay h2 {
+  font-family: 'Fredoka One', cursive;
+  font-size: 2rem;
+  margin-bottom: 20px;
+}
+
 /* ===== Loading Overlay (Building Puzzle) ===== */
 
 .loading-overlay {

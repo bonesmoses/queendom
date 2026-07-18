@@ -57,6 +57,7 @@ function init() {
   document.getElementById('btn-pause').addEventListener('click', togglePause);
   document.getElementById('btn-resume').addEventListener('click', resumeFromPause);
   document.getElementById('btn-copy-board').addEventListener('click', copyBoardDefinition);
+  document.getElementById('btn-retry').addEventListener('click', startNewGame);
 
   sizeSelect.addEventListener('change', startNewGame);
   difficultySelect.addEventListener('change', startNewGame);
@@ -79,11 +80,22 @@ function startNewGame() {
   // Stop old timer
   if (timerInterval) clearInterval(timerInterval);
 
+  // Dismiss build-fail overlay immediately (if retrying)
+  hideBuildFailOverlay();
+
   // Show loading overlay — yield to browser so it paints before blocking
   showLoadingOverlay();
   setTimeout(() => {
-    // Create new game (may block for a while on larger boards)
-    game = createGame(size, difficulty);
+    let newGame;
+    try {
+      // Create new game (may block for a while on larger boards)
+      newGame = createGame(size, difficulty);
+    } catch (err) {
+      hideLoadingOverlay();
+      showBuildFailOverlay();
+      return;
+    }
+    game = newGame;
     hideLoadingOverlay();
 
     // Setup renderer
@@ -107,7 +119,8 @@ function startNewGame() {
     };
     renderer.onNewGame = startNewGame;
 
-    // Hide all overlays
+    // Hide all overlays (including build-fail)
+    hideBuildFailOverlay();
     hideAllOverlays();
 
     // Update UI
@@ -131,6 +144,14 @@ function showLoadingOverlay() {
 
 function hideLoadingOverlay() {
   document.getElementById('loading-overlay').className = 'overlay hidden';
+}
+
+function showBuildFailOverlay() {
+  document.getElementById('build-fail-overlay').className = 'overlay build-fail-overlay';
+}
+
+function hideBuildFailOverlay() {
+  document.getElementById('build-fail-overlay').className = 'overlay build-fail-overlay hidden';
 }
 
 function togglePause() {
