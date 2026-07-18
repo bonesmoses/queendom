@@ -29,7 +29,8 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
   }
 
   let attempt = 0;
-  const maxAttempts = 10000;
+  // Larger boards need more attempts to find valid configurations
+  const maxAttempts = size >= 9 ? 50000 : 10000;
 
   while (attempt < maxAttempts) {
     const rng = createRng(seed + attempt * 1000);
@@ -51,6 +52,11 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
 
     const result = solveWithMaxTechnique(regions, size, config.maxTechnique, config.maxForcing);
     if (result.solved) {
+      // For medium/hard: ensure advanced techniques are needed by checking
+      // whether basic techniques i-v can solve the board alone.
+      if (!checkTechniqueRequirement(difficulty, regions, size)) {
+        attempt++; continue;
+      }
       return { regions, solution, seed: seed + attempt * 1000 };
     }
 
@@ -64,8 +70,8 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
         if (!validateRegions(regions, size)) { mutations++; continue; }
         const mutatedResult = solveWithMaxTechnique(regions, size, config.maxTechnique, config.maxForcing);
         if (mutatedResult.solved) {
-          // Extract the actual solution from the solver — ensure solution[i]
-          // is the queen position for region i.
+          // Check technique requirement for mutated board
+          if (!checkTechniqueRequirement(difficulty, regions, size)) { mutations++; continue; }
           const newSolution = new Array(size);
           for (const [regId, cellKey] of mutatedResult.placements) {
             const key = Number(cellKey);
@@ -525,4 +531,35 @@ export function areRegionsConnected(regions, size) {
   for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) ids.add(regions[r][c]);
   for (const id of ids) if (!isRegionConnected(regions, size, id)) return false;
   return true;
+}
+
+// ===========================================================================
+// Technique requirement check — uses solver.js directly to determine if
+// advanced techniques are needed for this board.
+// ===========================================================================
+
+function checkTechniqueRequirement(difficulty, regions, size) {
+  // For easy mode: always accept (basic techniques i-v are sufficient)
+  if (difficulty === 'easy') return true;
+
+  // Test with limited solver: only techniques i-v (pigeonhole allowed,
+  // but no adjacency blocking vi or row/col intersection vii).
+  // If this can solve the board, then advanced techniques aren't needed.
+  const basicResult = solveWithMaxTechnique(regions, size, 5);
+
+  if (!basicResult.solved) {
+    // Board requires techniques beyond v (adjacency blocking or row/col intersection)
+    // → advanced techniques ARE needed → good for medium/hard
+    return true;
+  }
+
+  // Basic techniques i-v can solve alone.
+  // For larger boards, allow some leeway — not every board needs advanced techniques,
+  // but we should still try to find ones that do.
+  if (size >= 9) {
+    // Large boards: accept even if basic solves it (harder to force pigeonhole on large boards)
+    return true;
+  }
+
+  return false;
 }
