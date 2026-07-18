@@ -61,7 +61,7 @@ The codebase follows a unidirectional pipeline: **Generator → Solver → Engin
 ### Difficulty Tiers
 
 | Tier | Techniques | Forcing Chains |
-|---|---|
+|---|---|---|
 | **Easy** | Basic elimination, naked singles, hidden singles, region confinement, pigeonhole, adjacency blocking, row/col intersections | None |
 | **Medium** | All above techniques | Up to 1 attempt |
 | **Hard** | All techniques including forcing chains | Up to 2 attempts |
