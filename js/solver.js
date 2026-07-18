@@ -1,8 +1,7 @@
 // Solver — logical deduction engine for validating puzzle solvability.
 // Each technique returns { changed: boolean, contradiction: boolean }.
 
-function cellKey(r, c) { return r * 100 + c; }
-function cellPos(key) { return [Math.floor(key / 100), key % 100]; }
+import { cellKey, cellPos } from './cell.js';
 
 export function createSolverState(regions, size) {
   // Find the actual number of regions from the grid (may differ from size in edge cases)
@@ -223,6 +222,24 @@ export function applyPigeonhole(state) {
     regRows.set(regId, rows); regCols.set(regId, cols);
   }
 
+  // Cache per-region candidate lists keyed by row/col for reuse in elimination loops.
+  // Avoids calling getCandsInRow / getCandsInCol (which iterate all candidates) inside the combo loop.
+  const rowCands = [];
+  const colCands = [];
+  for (let i = 0; i < state.size; i++) {
+    rowCands.push([]);
+    colCands.push([]);
+  }
+  for (const regId of unplaced) {
+    for (const key of state.candidates[regId]) {
+      const [r, c] = cellPos(key);
+      if (r < state.size && c < state.size) {
+        rowCands[r].push({ regId, key });
+        colCands[c].push({ regId, key });
+      }
+    }
+  }
+
   // Row groupings: K regions confined to ≤K rows → they own those rows
   // Cap k at 3 — higher-order combos are exponentially expensive and rarely useful.
   const maxK = Math.min(3, unplaced.length);
@@ -244,11 +261,11 @@ export function applyPigeonhole(state) {
 
       const regSet = new Set(combo);
       for (const r of rowSet) {
-        for (let regId = 0; regId < state.size; regId++) {
-          if (state.placed.has(regId) || regSet.has(regId)) continue;
-          for (const key of getCandsInRow(state.candidates[regId], r)) {
-            if (state.candidates[regId].delete(key)) changed = true;
-          }
+        // Use precomputed cache instead of iterating candidates via getCandsInRow
+        for (const entry of rowCands[r]) {
+          if (state.placed.has(entry.regId) || regSet.has(entry.regId)) continue;
+          const cands = state.candidates[entry.regId];
+          if (cands && cands.delete(entry.key)) changed = true;
         }
       }
     }
@@ -271,11 +288,11 @@ export function applyPigeonhole(state) {
 
       const regSet = new Set(combo);
       for (const c of colSet) {
-        for (let regId = 0; regId < state.size; regId++) {
-          if (state.placed.has(regId) || regSet.has(regId)) continue;
-          for (const key of getCandsInCol(state.candidates[regId], c)) {
-            if (state.candidates[regId].delete(key)) changed = true;
-          }
+        // Use precomputed cache instead of iterating candidates via getCandsInCol
+        for (const entry of colCands[c]) {
+          if (state.placed.has(entry.regId) || regSet.has(entry.regId)) continue;
+          const cands = state.candidates[entry.regId];
+          if (cands && cands.delete(entry.key)) changed = true;
         }
       }
     }
@@ -504,6 +521,30 @@ export function applyForcingChains(state) {
 // Solve loop
 // ===========================================================================
 
+/**
+ * Named technique registry — maps technique names to their functions.
+ * Technique tiers follow the numbering in AGENTS.md:
+ *
+ *   i  = Basic Elimination (always runs, not in TECHNIQUES array)
+ *  ii  = Naked Singles
+ * iii = Hidden Singles
+ *  iv  = Region Confinement
+ *   v  = Pigeonhole / Groupings
+ *  vi  = Adjacency Blocking
+ *  vii = Row/Column + Region Intersections
+ * viii = Forcing Chains
+ */
+const TECHNIQUE_NAMES = /** @type {const} */ ({
+  BASIC_ELIMINATION:    'BASIC_ELIMINATION',    // i (always runs, not in array)
+  NAKED_SINGLES:        'NAKED_SINGLES',        // ii
+  HIDDEN_SINGLES:       'HIDDEN_SINGLES',       // iii
+  REGION_CONFINEMENT:   'REGION_CONFINEMENT',   // iv
+  PIGEONHOLE:           'PIGEONHOLE',           // v
+  ADJACENCY_BLOCKING:   'ADJACENCY_BLOCKING',   // vi
+  ROW_COL_INTERSECTION: 'ROW_COL_INTERSECTION', // vii
+  FORCING_CHAINS:       'FORCING_CHAINS',       // viii
+});
+
 const TECHNIQUES = [
   applyNakedSingles,           // ii (index 0)
   applyHiddenSingles,          // iii (1)
@@ -513,6 +554,12 @@ const TECHNIQUES = [
   applyRowColIntersection,     // vii (5)
   applyForcingChains,          // viii (6)
 ];
+
+const TECHNIQUE_INDEX = Object.fromEntries(
+  Object.entries(TECHNIQUE_NAMES).map(([name], i) => [name, i])
+);
+// Adjust: BASIC_ELIMINATION is not in the array, so indices shift for ii–viii.
+Object.assign(TECHNIQUE_INDEX, { BASIC_ELIMINATION: -1 }); // sentinel
 
 export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcing = Infinity) {
   const state = createSolverState(regions, size);
@@ -533,11 +580,11 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
     // Run techniques up to maxTechnique (1=none beyond basic, 8=all)
     const techLimit = Math.min(maxTechnique - 1, TECHNIQUES.length);
     for (let ti = 0; ti < techLimit; ti++) {
-      // Technique viii (index 6) is forcing chains — respect the usage cap
-      if (ti === 6 && forcingUsed >= maxForcing) continue;
+      // Technique viii is forcing chains — respect the usage cap
+      if (ti === TECHNIQUE_INDEX.FORCING_CHAINS && forcingUsed >= maxForcing) continue;
 
       const result = TECHNIQUES[ti](state);
-      if (ti === 6) forcingUsed++;
+      if (ti === TECHNIQUE_INDEX.FORCING_CHAINS) forcingUsed++;
       if (result.changed) { changed = true; break; }
       if (result.contradiction) return { solved: false, placements: null };
     }

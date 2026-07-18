@@ -6,10 +6,32 @@ import { Renderer, formatTimer } from './renderer.js';
 let game;
 let renderer;
 let timerInterval = null;
+let isGameStarting = false; // guard against concurrent startNewGame calls that could leave stale intervals running
 
 /** Check if ?debug=1 is in the URL query string. */
 function isDebugMode() {
   return new URLSearchParams(window.location.search).get('debug') === '1';
+}
+
+/**
+ * Validate board parameters before starting a new game.
+ *
+ * @param {number} size — board dimension
+ * @param {string} difficulty — 'easy', 'medium', or 'hard'
+ * @returns {{ valid: boolean, message?: string }}
+ */
+function validateBoardParams(size, difficulty) {
+  const MIN_SIZE = 6;
+  const MAX_SIZE = 12;
+  const VALID_DIFFICULTIES = ['easy', 'medium', 'hard'];
+
+  if (isNaN(size)) return { valid: false, message: 'Invalid board size.' };
+  if (!Number.isInteger(size) || size < MIN_SIZE || size > MAX_SIZE)
+    return { valid: false, message: `Board size must be an integer between ${MIN_SIZE} and ${MAX_SIZE}.` };
+  if (!VALID_DIFFICULTIES.includes(difficulty))
+    return { valid: false, message: 'Difficulty must be easy, medium, or hard.' };
+
+  return { valid: true };
 }
 
 /**
@@ -82,30 +104,47 @@ function init() {
 }
 
 function startNewGame() {
+  // Guard: prevent concurrent game starts that could leave stale intervals running.
+  if (isGameStarting) return;
+  isGameStarting = true;
+
   const sizeSelect = document.getElementById('size-select');
   const difficultySelect = document.getElementById('difficulty-select');
   const size = parseInt(sizeSelect.value);
   const difficulty = difficultySelect.value;
 
-  // Stop old timer
+  // Validate parameters — reject before they reach the generator.
+  const validation = validateBoardParams(size, difficulty);
+  if (!validation.valid) {
+    isGameStarting = false;
+    alert(`Invalid board settings: ${validation.message}`);
+    return;
+  }
+
+  // Stop old timer — clear first to prevent double-interval bug.
   if (timerInterval) clearInterval(timerInterval);
 
   // Dismiss build-fail overlay immediately (if retrying)
   hideBuildFailOverlay();
 
-  // Show loading overlay — yield to browser so it paints before blocking
+  // Show loading overlay — yield to browser so it paints before blocking.
   showLoadingOverlay();
-  setTimeout(() => {
-    let newGame;
+  const startTimeout = setTimeout(() => {
+    let gameState;
     try {
-      // Create new game (may block for a while on larger boards)
-      newGame = createGame(size, difficulty);
+      // Create new game (may block for a while on larger boards).
+      gameState = createGame(size, difficulty);
     } catch (err) {
       hideLoadingOverlay();
       showBuildFailOverlay();
+      isGameStarting = false;
       return;
     }
-    game = newGame;
+
+    // Clear the timeout reference so it won't fire again if startNewGame was called mid-execution.
+    clearTimeout(startTimeout);
+    game = gameState;
+    isGameStarting = false;
     hideLoadingOverlay();
 
     // Setup renderer
@@ -140,9 +179,9 @@ function startNewGame() {
     // Start timer
     game.timerRunning = true;
     timerInterval = setInterval(() => {
-      tickTimer(game);
-      updateTimerDisplay();
-  }, 1000);
+        tickTimer(game);
+        updateTimerDisplay();
+      }, 1000);
 
     renderer.render();
   });

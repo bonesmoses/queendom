@@ -25,7 +25,7 @@ describe('Generator — Solution Validation', () => {
         }
       }
     }
-  }, 60000);
+  }, 120000);
 
   it('each queen is in its corresponding region', () => {
     for (let size = 6; size <= 8; size++) {

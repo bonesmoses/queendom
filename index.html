@@ -104,6 +104,34 @@
   </div>
 </footer>
 
+<!-- SVG templates for board cell rendering (queens and X marks). -->
+<!-- Fetched by renderer.js via _getTemplateSVG() to avoid recreating strings on every render. -->
+<template id="queen-svg">
+  <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 50 L3 18 L17 32 L32 8 L47 32 L61 18 L56 50 Q32 56 8 50 Z"
+          fill="#FFD700" stroke="rgba(0,0,0,1)" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="17" cy="32" r="3" fill="#E74C3C"/>
+    <circle cx="32" cy="8" r="3" fill="#3498DB"/>
+    <circle cx="47" cy="32" r="3" fill="#2ECC71"/>
+  </svg>
+</template>
+<template id="x-mark-svg">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <line x1="25" y1="25" x2="75" y2="75" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+    <line x1="75" y1="25" x2="25" y2="75" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+    <line x1="25" y1="25" x2="75" y2="75" stroke="#333" stroke-width="8" stroke-linecap="round"/>
+    <line x1="75" y1="25" x2="25" y2="75" stroke="#333" stroke-width="8" stroke-linecap="round"/>
+  </svg>
+</template>
+<template id="dead-x-svg">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <line x1="25" y1="25" x2="75" y2="75" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+    <line x1="75" y1="25" x2="25" y2="75" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+    <line x1="25" y1="25" x2="75" y2="75" stroke="#C00" stroke-width="12" stroke-linecap="round"/>
+    <line x1="75" y1="25" x2="25" y2="75" stroke="#C00" stroke-width="12" stroke-linecap="round"/>
+  </svg>
+</template>
+
 <script type="module" src="js/main.js"></script>
 
 </body>

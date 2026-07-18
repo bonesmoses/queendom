@@ -2,6 +2,7 @@
 // Manages game state: lives, timer, queen placements, marks, win/lose detection.
 
 import { generateBoard } from './generator.js';
+import { cellKey, cellPos as _cellPos } from './cell.js';
 
 export const Mark = Object.freeze({ NONE: 'none', X: 'x', DEAD: 'dead' });
 export const Status = Object.freeze({ PLAYING: 'playing', WON: 'won', LOST: 'lost' });
@@ -39,36 +40,21 @@ export function createGame(size, difficulty = 'hard', seed = null) {
   };
 }
 
-// Override seed after generateBoard captures it
-const origCreateGame = createGame;
-export function createGameWithSeed(size, difficulty, seed) {
-  const game = origCreateGame(size, difficulty, seed);
-  return game;
-}
 
-/**
- * Internal: convert [row, col] to cell key.
- */
-function cellKey(r, c) {
-  return r * 100 + c;
-}
+// Export cell utilities so tests and renderer can use the shared implementation.
+export const _cellKey = cellKey;
 
-export { cellKey as _cellKey }; // exported for testing/rendering
-
-/**
- * Parse cell key back to [row, col].
- */
-export function cellPos(key) {
-  return [Math.floor(key / 100), key % 100];
-}
+// Re-export the shared cell position parser for external use.
+export const cellPos = _cellPos;
 
 /**
  * Attempt to place a queen at (row, col).
  * Returns { ok: boolean, message: string }.
  *
- * - If the cell already has a queen or is out of bounds → rejected.
- * - If the cell matches the solution → queen placed, win checked.
- * - If the cell does not match → life lost, permanent dead mark placed.
+ * @param {GameState} game — current game state
+ * @param {number} row — row index (0-based)
+ * @param {number} col — column index (0-based)
+ * @returns {{ ok: boolean, message: string }}
  */
 export function placeQueen(game, row, col) {
   if (game.status !== Status.PLAYING) {
@@ -113,10 +99,10 @@ export function placeQueen(game, row, col) {
 
 /**
  * Toggle a player X mark on a cell.
- * - If no mark → add Mark.X
- * - If Mark.X → remove it
- * - If Mark.DEAD → no change (permanent)
- * - If queen present → no change
+ *
+ * @param {GameState} game — current game state
+ * @param {number} row — row index (0-based)
+ * @param {number} col — column index (0-based)
  */
 export function toggleMark(game, row, col) {
   if (game.status !== Status.PLAYING) return;
@@ -142,6 +128,8 @@ export function toggleMark(game, row, col) {
 
 /**
  * Check if all queens are correctly placed.
+ *
+ * @returns {boolean}
  */
 export function checkWin(game) {
   return game.status === Status.WON;
@@ -149,6 +137,8 @@ export function checkWin(game) {
 
 /**
  * Check if the player has lost.
+ *
+ * @returns {boolean}
  */
 export function checkLose(game) {
   return game.status === Status.LOST;
@@ -156,6 +146,8 @@ export function checkLose(game) {
 
 /**
  * Get the number of correctly placed queens.
+ *
+ * @returns {number}
  */
 export function getQueenCount(game) {
   return game.queens.size;
@@ -163,13 +155,17 @@ export function getQueenCount(game) {
 
 /**
  * Pause the timer.
+ *
+ * @param {GameState} game
  */
 export function pauseTimer(game) {
   game.timerRunning = false;
 }
 
 /**
- * Resume the timer.
+ * Resume the timer if still playing.
+ *
+ * @param {GameState} game
  */
 export function resumeTimer(game) {
   if (game.status === Status.PLAYING) {
@@ -179,7 +175,8 @@ export function resumeTimer(game) {
 
 /**
  * Tick the timer (call this every second when timer is running).
- * Returns the updated timer value in seconds.
+ *
+ * @returns {number} Updated timer value in seconds.
  */
 export function tickTimer(game) {
   if (game.timerRunning && game.status === Status.PLAYING) {
@@ -190,6 +187,9 @@ export function tickTimer(game) {
 
 /**
  * Format timer seconds as MM:SS.
+ *
+ * @param {number} seconds
+ * @returns {string}
  */
 export function formatTimer(seconds) {
   const m = Math.floor(seconds / 60);
@@ -206,6 +206,8 @@ export function newGame(size, difficulty = 'hard', seed = null) {
 
 /**
  * Get the mark at a cell, or Mark.NONE if none.
+ *
+ * @returns {string}
  */
 export function getMark(game, row, col) {
   const key = cellKey(row, col);
@@ -214,6 +216,8 @@ export function getMark(game, row, col) {
 
 /**
  * Check if a cell has a placed queen.
+ *
+ * @returns {boolean}
  */
 export function hasQueen(game, row, col) {
   return game.queens.has(cellKey(row, col));
@@ -221,6 +225,8 @@ export function hasQueen(game, row, col) {
 
 /**
  * Get the solution as an array of [row, col] pairs.
+ *
+ * @returns {[number, number][]}
  */
 export function getSolution(game) {
   return [...game.solution];

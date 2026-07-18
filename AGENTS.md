@@ -27,16 +27,17 @@ See `plan/structure.md` for more information.
 
 | File | Role |
 |---|---|
+| `cell.js` | Shared cell coordinate utilities. Exports `cellKey(r, c)` → `r * 100 + c` and `cellPos(key)` → `[row, col]`. Import this instead of defining your own — it is the single source of truth for all cell encoding across the codebase. |
 | `generator.js` | Creates boards: places N non-adjacent queen positions, grows regions around them via BFS frontier growth (O(N²) neighbor-only scan), then validates solvability. Uses a seeded PRNG for reproducibility. On solver failure, attempts guided mutation — shrinking the most-stuck region and retrying — before full regeneration. |
-| `solver.js` | Human-style logical solver with 7 technique tiers: basic elimination, naked singles, hidden singles, region confinement, pigeonhole, adjacency blocking, forcing chains. Returns `{ solved, placements, diagnostics }`. The `placements` value is a `Map<regionId, cellKey>`. Used both to validate generated boards and to enforce difficulty limits. |
-| `engine.js` | Pure-logic game state machine. No DOM. Manages queen placement validation against the solution set, marks (X / dead), lives (3), timer, win/lose detection. Exports `createGame()`, `placeQueen()`, `toggleMark()`, etc. |
-| `renderer.js` | DOM rendering. Reads game state and updates the board UI. Calls back to engine on user interaction. |
-| `main.js` | Entry point. Wires renderer callbacks to engine functions, manages timer interval, handles pause/resume overlays, keyboard shortcuts (P = pause, N = new game). |
+| `solver.js` | Human-style logical solver with 8 technique tiers: basic elimination (i, always runs), naked singles (ii), hidden singles (iii), region confinement (iv), pigeonhole/groupings (v), adjacency blocking (vi), row/col intersections (vii), forcing chains (viii). Returns `{ solved, placements, diagnostics }`. The `placements` value is a `Map<regionId, cellKey>`. Technique registry uses named constants (`TECHNIQUE_NAMES`, `TECHNIQUE_INDEX`) — do not use magic indices. |
+| `engine.js` | Pure-logic game state machine. No DOM. Manages queen placement validation against the solution set, marks (X / dead), lives (3), timer, win/lose detection. Exports `createGame()`, `placeQueen()`, `toggleMark()`, etc. Imports cell utilities from `cell.js`. |
+| `renderer.js` | DOM rendering. Reads game state and updates the board UI. Calls back to engine on user interaction. SVG icons (queens, X marks) are defined as `<template>` elements in `index.html` — fetched via `_getTemplateSVG()`. Imports cell utilities from `cell.js`. |
+| `main.js` | Entry point. Wires renderer callbacks to engine functions, manages timer interval, handles pause/resume overlays, keyboard shortcuts (P = pause, N = new game). Includes input validation for board size (6–12) and difficulty before passing to the generator. |
 | `prng.js` | Mulberry32 seeded PRNG with helpers: `rngFloat()`, `rngInt()`, `rngShuffle()` |
 
 ### Cell key encoding
 
-Throughout the codebase, cell positions are encoded as `r * 100 + c` (supports boards up to 99x99). Decode with `[Math.floor(key / 100), key % 100]`. This convention is shared between generator.js, solver.js, and engine.js.
+Cell positions are encoded as `r * 100 + c` (supports boards up to 99x99). Decode with `[Math.floor(key / 100), key % 100]`. The shared implementation lives in `js/cell.js` — import it from there instead of defining your own. All modules that need cell encoding should use this single source of truth: `cellKey(r, c)` and `cellPos(key)`.
 
 ### Board generation flow
 
@@ -45,15 +46,15 @@ Throughout the codebase, cell positions are encoded as `r * 100 + c` (supports b
 3. Grow regions via BFS — pick frontier cells (unassigned neighbors of assigned cells) weighted by difficulty (easy = favor smaller regions)
 4. Run the solver to validate the board is logically solvable within difficulty constraints
 5. If solver fails and the board is "close enough" (≥50% placed, no contradiction), mutate stuck region boundaries and retry solver; only mutate regions, not queen locations.
-6. Repeat up to 1000 attempts
+6. Repeat up to 50,000 attempts (larger boards like 12×12 may need 10K+ before finding a valid configuration)
 
 ### Difficulty tiers
 
-The solver follows the solution patterns explained in `plan/strategy.md`.
+The solver follows the solution patterns explained in `plan/strategy.md`. Technique numbers use Roman numerals matching the solver's internal registry:
 
-- **Easy**: solvable with techniques 1-6 only, zero forcing chains
-- **Medium**: techniques 1–10 allowed, up to 1 forcing chain
-- **Hard**: all techniques allowed, up to 2 forcing chains
+- **Easy**: solvable with techniques i–v only (basic elimination through pigeonhole), zero forcing chains. All regions are small anchors.
+- **Medium**: techniques i–vi allowed (adds adjacency blocking), up to 1 forcing chain.
+- **Hard**: techniques i–vii + 2 forcing chains allowed (adds row/col intersections). Requires advanced deduction for some puzzles.
 
 ### Tests (`test/`)
 

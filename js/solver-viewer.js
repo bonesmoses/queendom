@@ -14,11 +14,10 @@ import {
 } from './solver.js';
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers — use shared cell utilities from cell.js
 // ---------------------------------------------------------------------------
 
-function cellKey(r, c) { return r * 100 + c; }
-function cellPos(key) { return [Math.floor(key / 100), key % 100]; }
+import { cellKey, cellPos } from './cell.js';
 
 const TECH_NAMES = [
   'Basic Elimination',

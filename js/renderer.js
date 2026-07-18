@@ -2,6 +2,7 @@
 // Takes a GameState from the engine and renders it to the DOM.
 
 import { Mark, Status } from './engine.js';
+import { cellKey } from './cell.js';
 
 // Region colors — each has a distinct hue AND saturation level for maximum distinction
 const REGION_COLORS = [
@@ -19,23 +20,17 @@ const REGION_COLORS = [
   '#AED581', // soft green
 ];
 
-// SVG crown icon — gold with dark outline for visibility on light regions
-const QUEEN_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <path d="M8 50 L3 18 L17 32 L32 8 L47 32 L61 18 L56 50 Q32 56 8 50 Z"
-        fill="#FFD700" stroke="rgba(0,0,0,1)" stroke-width="3" stroke-linejoin="round"/>
-  <circle cx="17" cy="32" r="3" fill="#E74C3C"/>
-  <circle cx="32" cy="8" r="3" fill="#3498DB"/>
-  <circle cx="47" cy="32" r="3" fill="#2ECC71"/>
-</svg>`;
+// SVG template references — fetched from <template> elements in the HTML.
+// This avoids recreating strings on every render and keeps SVGs in the document.
+const _svgCache = new Map();
 
-// SVG X mark — thin black for player marks, bold red for dead marks
-const X_SVG = (color = '#000', strokeWidth = 5) => `
-<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <line x1="25" y1="25" x2="75" y2="75" stroke="#fff" stroke-width="${strokeWidth + 4}" stroke-linecap="round"/>
-  <line x1="75" y1="25" x2="25" y2="75" stroke="#fff" stroke-width="${strokeWidth + 4}" stroke-linecap="round"/>
-  <line x1="25" y1="25" x2="75" y2="75" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round"/>
-  <line x1="75" y1="25" x2="25" y2="75" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round"/>
-</svg>`;
+function _getTemplateSVG(id) {
+  if (!_svgCache.has(id)) {
+    const tpl = document.getElementById(id);
+    _svgCache.set(id, tpl ? tpl.content.firstElementChild : null);
+  }
+  return _svgCache.get(id);
+}
 
 export class Renderer {
   constructor(game, container) {
@@ -83,9 +78,9 @@ export class Renderer {
 
     // Check each direction for a different region neighbor
     if (r === 0 || this.game.regions[r - 1][c] !== reg) cell.classList.add('border-top');
-    if (r === size - 1 || this.game.regions[r + 1][c] !== reg) cell.classList.add('border-bottom');
+    if (r < size - 1 && this.game.regions[r + 1][c] !== reg) cell.classList.add('border-bottom');
     if (c === 0 || this.game.regions[r][c - 1] !== reg) cell.classList.add('border-left');
-    if (c === size - 1 || this.game.regions[r][c + 1] !== reg) cell.classList.add('border-right');
+    if (c < size - 1 && this.game.regions[r][c + 1] !== reg) cell.classList.add('border-right');
   }
 
   _attachClickHandlers() {
@@ -184,7 +179,8 @@ export class Renderer {
 
     // Check for queen
     if (this.game.queens.has(key)) {
-      cell.innerHTML = QUEEN_SVG;
+      const svg = _getTemplateSVG('queen-svg');
+      if (svg) cell.innerHTML = svg.cloneNode(true).outerHTML;
       cell.classList.add('has-queen');
       return;
     }
@@ -192,20 +188,27 @@ export class Renderer {
     // Check for marks
     const mark = this.game.marks.get(key);
     if (mark === Mark.DEAD) {
-      cell.innerHTML = X_SVG('#C00', 12);
+      const svg = _getTemplateSVG('dead-x-svg');
+      if (svg) cell.innerHTML = svg.cloneNode(true).outerHTML;
       cell.classList.add('has-dead');
     } else if (mark === Mark.X) {
-      cell.innerHTML = X_SVG('#333', 8);
+      const svg = _getTemplateSVG('x-mark-svg');
+      if (svg) cell.innerHTML = svg.cloneNode(true).outerHTML;
       cell.classList.add('has-mark');
     }
   }
 
+  /**
+   * Update overlay visibility based on game status.
+   * Uses innerHTML assignment to clear old content + listeners before adding new ones.
+   */
   _updateOverlays() {
     const pauseOverlay = document.getElementById('pause-overlay');
     const gameOverOverlay = document.getElementById('game-over-overlay');
     const solutionOverlay = document.getElementById('solution-overlay');
 
     if (this.game.status === Status.WON) {
+      // Clear and rebuild game-over overlay — innerHTML assignment removes old listeners
       if (gameOverOverlay) {
         gameOverOverlay.className = 'overlay game-win';
         gameOverOverlay.innerHTML = `
@@ -216,13 +219,15 @@ export class Renderer {
             <button id="btn-new-game-win">New Game</button>
           </div>`;
         const btn = gameOverOverlay.querySelector('#btn-new-game-win');
-        if (btn && this.onNewGame) btn.addEventListener('click', () => this.onNewGame());
+        if (btn && this.onNewGame) {
+          btn.addEventListener('click', () => this.onNewGame());
+        }
       }
       if (pauseOverlay) pauseOverlay.className = 'overlay hidden';
       if (solutionOverlay) solutionOverlay.className = 'solution-overlay hidden';
+
     } else if (this.game.status === Status.LOST) {
-      // Hide solution overlay by default — user opens with "Show Solution"
-      if (solutionOverlay) solutionOverlay.className = 'solution-overlay hidden';
+      // Clear and rebuild game-over overlay — innerHTML assignment removes old listeners
       if (gameOverOverlay) {
         gameOverOverlay.className = 'overlay game-lose';
         gameOverOverlay.innerHTML = `
@@ -232,6 +237,7 @@ export class Renderer {
             <button id="btn-show-solution">Show Solution</button>
             <button id="btn-new-game-lose">New Game</button>
           </div>`;
+
         const showBtn = gameOverOverlay.querySelector('#btn-show-solution');
         if (showBtn) {
           showBtn.addEventListener('click', () => {
@@ -241,12 +247,19 @@ export class Renderer {
             solutionOverlay.className = 'solution-overlay';
           });
         }
-        const btn = gameOverOverlay.querySelector('#btn-new-game-lose');
-        if (btn && this.onNewGame) btn.addEventListener('click', () => {
-          solutionOverlay.className = 'solution-overlay hidden';
-          this.onNewGame();
-        });
+
+        const newGameBtn = gameOverOverlay.querySelector('#btn-new-game-lose');
+        if (newGameBtn && this.onNewGame) {
+          newGameBtn.addEventListener('click', () => {
+            solutionOverlay.className = 'solution-overlay hidden';
+            this.onNewGame();
+          });
+        }
       }
+
+      // Hide solution overlay by default — user opens with "Show Solution"
+      if (solutionOverlay) solutionOverlay.className = 'solution-overlay hidden';
+
     } else {
       // Playing — hide overlays
       if (gameOverOverlay) gameOverOverlay.className = 'overlay hidden';
@@ -273,16 +286,23 @@ export class Renderer {
           if (!cell.dataset._savedContent) {
             cell.dataset._savedContent = cell.innerHTML;
           }
-          cell.innerHTML = QUEEN_SVG;
-          cell.classList.add('has-queen');
+          const svg = _getTemplateSVG('queen-svg');
+          if (svg) {
+            cell.innerHTML = svg.cloneNode(true).outerHTML;
+            cell.classList.add('has-queen');
+          }
         }
       }
     }
 
-    // Wire up close button
-    const closeBtn = document.querySelector('#solution-overlay .close-btn');
-    if (closeBtn) {
-      closeBtn.onclick = () => {
+    // Remove old solution-close listeners to prevent accumulation.
+    // innerHTML on the overlay would destroy them, but we're not rebuilding it —
+    // just replacing the close button element itself.
+    const oldCloseBtn = document.querySelector('#solution-overlay .close-btn');
+    if (oldCloseBtn) {
+      const newBtn = oldCloseBtn.cloneNode(true);
+      oldCloseBtn.parentNode.replaceChild(newBtn, oldCloseBtn);
+      newBtn.onclick = () => {
         this._clearSolutionQueens();
         document.getElementById('solution-overlay').className = 'solution-overlay hidden';
         // Restore game-over overlay
@@ -311,9 +331,6 @@ export class Renderer {
     this.render();
   }
 }
-
-// Helper: convert [row, col] to cell key (matches engine.js)
-function cellKey(r, c) { return r * 100 + c; }
 
 export function formatTimer(seconds) {
   const m = Math.floor(seconds / 60);
