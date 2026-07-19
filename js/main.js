@@ -104,6 +104,11 @@ function init() {
 }
 
 function startNewGame() {
+  // Clear stale timer immediately — before any async boundary or guard check.
+  // This prevents overlapping intervals when "New Game" is clicked rapidly.
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
+
   // Guard: prevent concurrent game starts that could leave stale intervals running.
   if (isGameStarting) return;
   isGameStarting = true;
@@ -120,9 +125,6 @@ function startNewGame() {
     alert(`Invalid board settings: ${validation.message}`);
     return;
   }
-
-  // Stop old timer — clear first to prevent double-interval bug.
-  if (timerInterval) clearInterval(timerInterval);
 
   // Dismiss build-fail overlay immediately (if retrying)
   hideBuildFailOverlay();
@@ -141,8 +143,6 @@ function startNewGame() {
       return;
     }
 
-    // Clear the timeout reference so it won't fire again if startNewGame was called mid-execution.
-    clearTimeout(startTimeout);
     game = gameState;
     isGameStarting = false;
     hideLoadingOverlay();
