@@ -243,15 +243,16 @@ function designRegions(size, solution, difficulty, rng) {
   if (nAnchors === size) {
     const nSmall = Math.max(size - 3, Math.ceil(size * 0.7));
     const smallSize = 2 + rngInt(rng, 0, 2); // 2-4
-    let budgetUsed = nSmall * smallSize;
+    const smallBudget = nSmall * smallSize;
+    const remaining = totalCells - smallBudget;
+    const absorberCount = size - nSmall;
+
     for (let i = 0; i < size; i++) {
       if (i < nSmall) {
         targets[i] = smallSize;
       } else {
-        // Absorbers get the remaining cells, distributed evenly
-        const absorberCount = size - nSmall;
-        const perAbsorber = Math.floor((totalCells - budgetUsed) / absorberCount);
-        const extra = (totalCells - budgetUsed) - perAbsorber * absorberCount;
+        const perAbsorber = absorberCount > 0 ? Math.floor(remaining / absorberCount) : 0;
+        const extra = absorberCount > 0 ? remaining - perAbsorber * absorberCount : 0;
         targets[i] = perAbsorber + ((i >= size - extra) ? 1 : 0);
       }
     }
