@@ -8,7 +8,5 @@ export function cellKey(r, c) {
 }
 
 export function cellPos(key) {
-  const size = key >= 100 ? Math.floor(key / 100) : 0;
-  // For keys < 100 (single-cell boards), floor division gives 0 — correct.
   return [Math.floor(key / 100), key % 100];
 }
