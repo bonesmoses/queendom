@@ -134,19 +134,19 @@ Each item is independent and reentrant: run the verify step first; if it passes,
 
 ## Minor 9 — Document `isSolved` early exit (`js/solver.js`)
 
-- [ ] **Verify:** Read `js/solver.js`, locate the solve loop (~line 407). Confirm:
+- [X] **Verify:** Read `js/solver.js`, locate the solve loop (~line 570). Confirm:
   ```js
   if (isSolved(state)) break;
   ```
   appears after `applyBasicElimination` inside the while loop.
-- [ ] **Fix:** Add a comment explaining the micro-optimization:
+- [X] **Fix:** Added a comment explaining the micro-optimization:
 
   ```js
   // Early exit: if basic elimination alone solved it, skip the technique loop.
   if (isSolved(state)) break;
   ```
 
-- [ ] **Verify:** No behavioral change. `npm test` passes.
+- [X] **Verify:** No behavioral change. `npm test` passes.
 
 ---
 

@@ -582,7 +582,8 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
     if (elimResult.changed) changed = true;
     if (elimResult.contradiction)
       return { solved: false, placements: null, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
-    if (isSolved(state)) break; // early exit after basic elimination solves it
+    // Early exit: if basic elimination alone solved it, skip the technique loop.
+    if (isSolved(state)) break;
 
     // Run techniques up to maxTechnique (1=none beyond basic, 8=all)
     const techLimit = Math.min(maxTechnique - 1, TECHNIQUES.length);
