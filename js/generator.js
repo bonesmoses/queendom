@@ -11,9 +11,12 @@ export const Difficulty = Object.freeze({
   HARD: 'hard',
 });
 
-// Pre-filter thresholds
-const MAX_REGION_SIZE_RATIO = 0.35; // A region larger than this ratio is likely unsolvable by deduction
-const MIN_SMALL_REGIONS_FRACTION = 0.2; // At least this fraction of regions should be ≤6 cells (creates anchors)
+// Pre-filter thresholds — tuned empirically to reject obviously unsolvable boards
+// before running the expensive solver. Values chosen from generation profiling:
+//   - Regions >35% of the board are too large for logical deduction alone.
+//   - At least 20% of regions must be small (≤6 cells) to provide anchor points.
+const MAX_REGION_SIZE_RATIO = 0.35;
+const MIN_SMALL_REGIONS_FRACTION = 0.2;
 
 // Each difficulty specifies:
 //   maxTechnique — highest solver technique allowed (1–8)

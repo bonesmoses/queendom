@@ -177,12 +177,12 @@ Each item is independent and reentrant: run the verify step first; if it passes,
 
 ## Minor 11 — Document magic numbers (`js/generator.js`)
 
-- [ ] **Verify:** Read the top of `js/generator.js`, locate:
+- [X] **Verify:** Read the top of `js/generator.js`, locate:
   ```js
   const MAX_REGION_SIZE_RATIO = 0.35;
   const MIN_SMALL_REGIONS_FRACTION = 0.2;
   ```
-- [ ] **Fix:** Add explanatory comments:
+- [X] **Fix:** Add explanatory comments:
 
   ```js
   // Pre-filter thresholds — tuned empirically to reject obviously unsolvable boards
@@ -193,7 +193,7 @@ Each item is independent and reentrant: run the verify step first; if it passes,
   const MIN_SMALL_REGIONS_FRACTION = 0.2;
   ```
 
-- [ ] **Verify:** No behavioral change. `npm test` passes.
+- [X] **Verify:** No behavioral change. `npm test` passes.
 
 ---
 
