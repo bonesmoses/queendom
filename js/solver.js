@@ -29,8 +29,12 @@ export function createSolverState(regions, size) {
 }
 
 function cloneState(s) {
+  // regions: deep clone (array of arrays)
+  // candidates: deep clone (Set → new Set)
+  // placed: shallow copy is safe — values are primitive cell keys
   return {
-    size: s.size, regions: s.regions.map(r => [...r]),
+    size: s.size,
+    regions: s.regions.map(r => [...r]),
     candidates: s.candidates.map(set => new Set(set)),
     placed: new Map(s.placed),
   };

@@ -77,8 +77,8 @@ Each item is independent and reentrant: run the verify step first; if it passes,
 
 ## Moderate 6 — `cloneState` documentation (`js/solver.js`)
 
-- [ ] **Verify:** Read `cloneState()` (~line 25). Confirm the asymmetry: deep clone for `regions` (arrays of arrays), deep clone for `candidates` (Set), shallow Map copy for `placed` (primitive values).
-- [ ] **Fix:** Add a clarifying comment:
+- [X] **Verify:** Read `cloneState()` (~line 34). Confirmed the asymmetry: deep clone for `regions` (array of arrays), deep clone for `candidates` (Set → new Set), shallow Map copy for `placed` (primitive values).
+- [X] **Fix:** Added a clarifying comment block above each field explaining why that particular cloning strategy is correct.
 
   ```js
   function cloneState(s) {
@@ -94,7 +94,7 @@ Each item is independent and reentrant: run the verify step first; if it passes,
   }
   ```
 
-- [ ] **Verify:** No behavioral change. `npm test` passes.
+- [X] **Verify:** No behavioral change. `npm test` passes — all 58 tests pass.
 
 ---
 
