@@ -152,19 +152,26 @@ Each item is independent and reentrant: run the verify step first; if it passes,
 
 ## Minor 10 — Remove no-op `overflow += 0` (`js/generator.js`)
 
-- [ ] **Verify:** Read `js/generator.js`, locate `overflow += 0` (~line 215).
-- [ ] **Fix:** Replace with a real comment or remove the dead branch:
+- [X] **Verify:** Read `js/generator.js`, locate `overflow += 0` (~line 215). Confirmed: the `if/else` branches are dead code — neither path mutates any state; `overflow += 0` is a no-op.
+- [X] **Fix:** Removed the entire dead if/else block and replaced it with an explanatory comment:
 
   ```diff
-  - if (targets[i] < maxNonAnchor) {
-  -   // Can absorb more in next pass
-  - } else {
-  -   overflow += 0; // at cap, will redistribute
-  - }
-  + // Regions at maxNonAnchor cap will not grow further.
-  ```
+    for (let i = 0; i < size; i++) {
+      if (!isAnchor[i] && !assigned[i]) {
+        assigned[i] = 1;
+        targets[i] = perRegion + (extra > 0 ? 1 : 0);
+        if (extra > 0) extra--;
+  -     if (targets[i] < maxNonAnchor) {
+  -       // Can absorb more in next pass
+  -     } else {
+  -       overflow += 0; // at cap, will redistribute
+  -     }
+  +     // Regions that hit the maxNonAnchor cap won't grow further;
+  +     // remaining cells are redistributed to uncapped regions on the next pass.
+      }
+    ```
 
-- [ ] **Verify:** `npm test` passes. No behavioral change.
+- [X] **Verify:** `npm test` passes — all 58 tests pass. No behavioral change (the removed branches mutated nothing).
 
 ---
 

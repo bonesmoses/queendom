@@ -281,11 +281,8 @@ function designRegions(size, solution, difficulty, rng) {
           assigned[i] = 1;
           targets[i] = perRegion + (extra > 0 ? 1 : 0);
           if (extra > 0) extra--;
-          if (targets[i] < maxNonAnchor) {
-            // Can absorb more in next pass
-          } else {
-            overflow += 0; // at cap, will redistribute
-          }
+          // Regions that hit the maxNonAnchor cap won't grow further;
+          // remaining cells are redistributed to uncapped regions on the next pass.
         }
       }
       remainingCells = totalCells - anchorBudget;
