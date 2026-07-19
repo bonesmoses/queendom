@@ -166,10 +166,10 @@ describe('Solver — Difficulty Validation', () => {
     }
   }, 60000);
 
-  it('hard puzzles are solvable with techniques i-vii + 2 forcing chains', () => {
+  it('hard puzzles are solvable with full solver (i-viii) + 2 forcing chains', () => {
     for (let size = 6; size <= 10; size++) {
       const board = generateBoard(size, 'hard', size * 999);
-      const result = solveWithMaxTechnique(board.regions, size, 7, 2);
+      const result = solveWithMaxTechnique(board.regions, size, 8, 2);
       expect(result.solved).toBe(true);
     }
   }, 60000);

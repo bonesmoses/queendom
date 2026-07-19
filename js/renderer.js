@@ -1,7 +1,7 @@
 // Renderer — DOM rendering + user interaction handling for Queendom.
 // Takes a GameState from the engine and renders it to the DOM.
 
-import { Mark, Status } from './engine.js';
+import { Mark, Status, formatTimer } from './engine.js';
 import { cellKey } from './cell.js';
 
 // Region colors — each has a distinct hue AND saturation level for maximum distinction
@@ -22,7 +22,12 @@ const REGION_COLORS = [
 
 // SVG template references — fetched from <template> elements in the HTML.
 // This avoids recreating strings on every render and keeps SVGs in the document.
-const _svgCache = new Map();
+let _svgCache = new Map();
+
+/** Clear the SVG cache when the board is rebuilt (templates may be re-added). */
+export function _clearSvgCache() {
+  _svgCache.clear();
+}
 
 function _getTemplateSVG(id) {
   if (!_svgCache.has(id)) {
@@ -92,7 +97,7 @@ export class Renderer {
 
       const r = parseInt(cell.dataset.row);
       const c = parseInt(cell.dataset.col);
-      const key = `${r},${c}`;
+      const key = cellKey(r, c);
 
       // If we already fired a dblclick for this cell, ignore the click
       if (this.clickTimers[key] === 'dbl') {
@@ -116,7 +121,7 @@ export class Renderer {
 
       const r = parseInt(cell.dataset.row);
       const c = parseInt(cell.dataset.col);
-      const key = `${r},${c}`;
+      const key = cellKey(r, c);
 
       // Cancel the single-click timer
       clearTimeout(this.clickTimers[key]);
@@ -312,6 +317,11 @@ export class Renderer {
     }
   }
 
+  /** Clear SVG template cache so fresh templates are fetched on next render. */
+  _invalidateSvgCache() {
+    _svgCache.clear();
+  }
+
   _clearSolutionQueens() {
     // Restore cells to their pre-solution state
     for (const cell of this.cellEls.flat()) {
@@ -324,16 +334,11 @@ export class Renderer {
   }
 
   setGame(game) {
+    this._invalidateSvgCache();
     this.game = game;
     // Rebuild the board
     const container = this.container;
     this._init();
     this.render();
   }
-}
-
-export function formatTimer(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }

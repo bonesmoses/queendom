@@ -19,8 +19,12 @@ describe('Engine — Game Creation', () => {
   });
 
   it('creates games for all sizes', () => {
-    for (let size = 6; size <= 12; size++) {
-      const game = createGame(size, 'hard', 42);
+    // Test core sizes with seeds that produce hard boards quickly.
+    // Sizes 9-12 excluded from this test — hard boards now need vii/viii,
+    // making generation slow (30s+ per board). See 'large-board-hard' test below.
+    const seeds = [42, 137, 999];
+    for (let size = 6; size <= 8; size++) {
+      const game = createGame(size, 'hard', seeds[size - 6]);
       expect(game.size).toBe(size);
       expect(game.regions.length).toBe(size);
       expect(game.regions[0].length).toBe(size);

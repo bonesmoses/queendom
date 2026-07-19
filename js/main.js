@@ -1,7 +1,7 @@
 // Main — Entry point for Queendom. Wires game engine to renderer.
 
-import { createGame, placeQueen, toggleMark, pauseTimer, resumeTimer, tickTimer, newGame, Status } from './engine.js';
-import { Renderer, formatTimer } from './renderer.js';
+import { createGame, placeQueen, toggleMark, pauseTimer, resumeTimer, tickTimer, newGame, Status, formatTimer } from './engine.js';
+import { Renderer } from './renderer.js';
 
 let game;
 let renderer;

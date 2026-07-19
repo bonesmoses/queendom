@@ -11,13 +11,17 @@ export const Difficulty = Object.freeze({
   HARD: 'hard',
 });
 
+// Pre-filter thresholds
+const MAX_REGION_SIZE_RATIO = 0.35; // A region larger than this ratio is likely unsolvable by deduction
+const MIN_SMALL_REGIONS_FRACTION = 0.2; // At least this fraction of regions should be ≤6 cells (creates anchors)
+
 // Each difficulty specifies:
 //   maxTechnique — highest solver technique allowed (1–8)
 //   maxForcing   — how many times forcing chains (tech viii) may fire
 const DIFF_CONFIG = {
   [Difficulty.EASY]:  { maxTechnique: 5, maxForcing: 0 },
   [Difficulty.MEDIUM]: { maxTechnique: 6, maxForcing: 1 },
-  [Difficulty.HARD]:  { maxTechnique: 7, maxForcing: 2 },
+  [Difficulty.HARD]:  { maxTechnique: 8, maxForcing: 2 },
 };
 
 /**
@@ -29,8 +33,12 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
   }
 
   let attempt = 0;
-  // Larger boards need more attempts to find valid configurations
-  const maxAttempts = size >= 9 ? 50000 : 10000;
+  // Larger boards need exponentially more attempts — especially for hard difficulty
+  // which now requires boards needing vii/viii (forcing chains) rather than just vi.
+  let maxAttempts;
+  if (size >= 12) maxAttempts = 300000;
+  else if (size >= 9) maxAttempts = 80000;
+  else maxAttempts = 30000;
 
   while (attempt < maxAttempts) {
     const rng = createRng(seed + attempt * 1000);
@@ -446,11 +454,11 @@ function preFilter(regions, size) {
   const totalCells = size * size;
   let smallCount = 0;
   for (const [, s] of regSize) {
-    if (s > totalCells * 0.35) return false;
+    if (s > totalCells * MAX_REGION_SIZE_RATIO) return false;
     if (s <= 6) smallCount++;
   }
 
-  const minSmall = Math.ceil(size * 0.2);
+  const minSmall = Math.ceil(size * MIN_SMALL_REGIONS_FRACTION);
   if (smallCount < minSmall) return false;
 
   return true;
@@ -538,28 +546,42 @@ export function areRegionsConnected(regions, size) {
 // advanced techniques are needed for this board.
 // ===========================================================================
 
+// Difficulty tiers define which techniques are allowed:
+//   easy   → i–v only, zero forcing chains (simple logical deduction)
+//   medium → i–vi + up to 1 forcing chain (adds adjacency blocking — slightly harder)
+//   hard   → i–viii + up to 2 forcing chains (full solver — hardest available techniques)
+const TECHNIQUE_BOUNDS = {
+  easy:   { maxTechnique: 5, maxForcing: 0 },
+  medium: { maxTechnique: 6, maxForcing: 1 },
+  hard:   { maxTechnique: 8, maxForcing: 2 },
+};
+
+/**
+ * Verify that a generated board actually requires the techniques allowed by its difficulty.
+ *
+ * For medium: boards must need adjacency blocking (vi) — not solvable with i–v only.
+ * For hard: boards use all available techniques. We check they can't be solved with
+ * just i–v + 0 forcing, ensuring at least one advanced technique is needed.
+ */
 function checkTechniqueRequirement(difficulty, regions, size) {
-  // For easy mode: always accept (basic techniques i-v are sufficient)
+  // Easy mode: always accept (basic techniques i-v are sufficient)
   if (difficulty === 'easy') return true;
 
-  // Test with limited solver: only techniques i-v (pigeonhole allowed,
-  // but no adjacency blocking vi or row/col intersection vii).
-  // If this can solve the board, then advanced techniques aren't needed.
-  const basicResult = solveWithMaxTechnique(regions, size, 5);
+  let subMaxTech, subMaxForcing;
 
-  if (!basicResult.solved) {
-    // Board requires techniques beyond v (adjacency blocking or row/col intersection)
-    // → advanced techniques ARE needed → good for medium/hard
-    return true;
+  if (difficulty === 'medium') {
+    // Medium must need technique vi (adjacency blocking): not solvable with i–v only.
+    subMaxTech = 5;
+    subMaxForcing = 0;
+  } else {
+    // Hard must use techniques beyond what medium provides:
+    // - Row/col intersection (vii) is the primary differentiator from medium
+    // We test with i–vi + 0 forcing chain attempts. If that can solve it, it's really medium.
+    subMaxTech = 6;
+    subMaxForcing = 0;
   }
 
-  // Basic techniques i-v can solve alone.
-  // For larger boards, allow some leeway — not every board needs advanced techniques,
-  // but we should still try to find ones that do.
-  if (size >= 9) {
-    // Large boards: accept even if basic solves it (harder to force pigeonhole on large boards)
-    return true;
-  }
+  const lowerResult = solveWithMaxTechnique(regions, size, subMaxTech, subMaxForcing);
 
-  return false;
+  return !lowerResult.solved;
 }

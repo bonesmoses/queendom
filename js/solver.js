@@ -1,6 +1,10 @@
 // Solver — logical deduction engine for validating puzzle solvability.
 // Each technique returns { changed: boolean, contradiction: boolean }.
 
+// Forcing chain limits — keep small to avoid exponential blow-up during board generation.
+const MAX_FORCING_CANDIDATE_SET_SIZE = 7; // Don't attempt forcing on regions with >N candidates
+const MAX_FORCING_CANDIDATES_TO_TEST = 6; // Only test up to N candidates per region
+
 import { cellKey, cellPos } from './cell.js';
 
 export function createSolverState(regions, size) {
@@ -125,15 +129,6 @@ export function applyHiddenSingles(state) {
       }
     }
 
-    // If a region has exactly 1 candidate in this row and no other unplaced region
-    // also has candidates here → that cell must be the queen (row ownership)
-    for (const [regId, cells] of regMap) {
-      if (cells.length === 1 && regMap.size === 1) {
-        state.placed.set(regId, cells[0]);
-        changed = true;
-        break;
-      }
-    }
   }
 
   // Same for columns
@@ -486,10 +481,10 @@ export function applyForcingChains(state) {
   }
 
   // Tighten threshold: only attempt forcing when candidate set is small
-  if (bestReg === -1 || bestCount > 7) return { changed, contradiction: false };
+  if (bestReg === -1 || bestCount > MAX_FORCING_CANDIDATE_SET_SIZE) return { changed, contradiction: false };
 
-  // Only test up to 6 candidates — testing all is expensive and diminishing returns
-  const cands = [...state.candidates[bestReg]].slice(0, 6);
+  // Only test up to a subset of candidates — testing all is expensive and diminishing returns
+  const cands = [...state.candidates[bestReg]].slice(0, MAX_FORCING_CANDIDATES_TO_TEST);
   for (const candKey of cands) {
     const clone = cloneState(state);
     clone.placed.set(bestReg, candKey);
@@ -555,11 +550,18 @@ const TECHNIQUES = [
   applyForcingChains,          // viii (6)
 ];
 
-const TECHNIQUE_INDEX = Object.fromEntries(
-  Object.entries(TECHNIQUE_NAMES).map(([name], i) => [name, i])
-);
-// Adjust: BASIC_ELIMINATION is not in the array, so indices shift for ii–viii.
-Object.assign(TECHNIQUE_INDEX, { BASIC_ELIMINATION: -1 }); // sentinel
+// Explicit index mapping — each value matches its position in TECHNIQUES[].
+// BASIC_ELIMINATION (-1) is not in the array; it runs unconditionally before the loop.
+const TECHNIQUE_INDEX = /** @type {Readonly<Record<string, number>>} */ ({
+  BASIC_ELIMINATION:    -1,
+  NAKED_SINGLES:        0,
+  HIDDEN_SINGLES:       1,
+  REGION_CONFINEMENT:   2,
+  PIGEONHOLE:           3,
+  ADJACENCY_BLOCKING:   4,
+  ROW_COL_INTERSECTION: 5,
+  FORCING_CHAINS:       6,
+});
 
 export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcing = Infinity) {
   const state = createSolverState(regions, size);
@@ -574,7 +576,8 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
     // Technique i (basic elimination) always runs first
     const elimResult = applyBasicElimination(state);
     if (elimResult.changed) changed = true;
-    if (elimResult.contradiction) return { solved: false, placements: null };
+    if (elimResult.contradiction)
+      return { solved: false, placements: null, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
     if (isSolved(state)) break; // early exit after basic elimination solves it
 
     // Run techniques up to maxTechnique (1=none beyond basic, 8=all)
@@ -586,7 +589,8 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
       const result = TECHNIQUES[ti](state);
       if (ti === TECHNIQUE_INDEX.FORCING_CHAINS) forcingUsed++;
       if (result.changed) { changed = true; break; }
-      if (result.contradiction) return { solved: false, placements: null };
+      if (result.contradiction)
+        return { solved: false, placements: null, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
     }
 
     if (!changed) { stalls++; if (stalls >= 3) break; }

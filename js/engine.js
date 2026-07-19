@@ -2,7 +2,7 @@
 // Manages game state: lives, timer, queen placements, marks, win/lose detection.
 
 import { generateBoard } from './generator.js';
-import { cellKey, cellPos as _cellPos } from './cell.js';
+import { cellKey, cellPos } from './cell.js';
 
 export const Mark = Object.freeze({ NONE: 'none', X: 'x', DEAD: 'dead' });
 export const Status = Object.freeze({ PLAYING: 'playing', WON: 'won', LOST: 'lost' });
@@ -40,12 +40,8 @@ export function createGame(size, difficulty = 'hard', seed = null) {
   };
 }
 
-
-// Export cell utilities so tests and renderer can use the shared implementation.
-export const _cellKey = cellKey;
-
-// Re-export the shared cell position parser for external use.
-export const cellPos = _cellPos;
+// Re-export cell utilities so tests and renderer can use the shared implementation.
+export { cellKey as _cellKey, cellPos };
 
 /**
  * Attempt to place a queen at (row, col).
