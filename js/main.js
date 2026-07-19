@@ -122,7 +122,7 @@ function startNewGame() {
   const validation = validateBoardParams(size, difficulty);
   if (!validation.valid) {
     isGameStarting = false;
-    alert(`Invalid board settings: ${validation.message}`);
+    console.warn(`Invalid board settings: ${validation.message}`);
     return;
   }
 

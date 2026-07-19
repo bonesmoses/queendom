@@ -100,15 +100,15 @@ Each item is independent and reentrant: run the verify step first; if it passes,
 
 ## Moderate 7 — Replace `alert()` with inline message (`js/main.js`)
 
-- [ ] **Verify:** Read `js/main.js`, locate the `validateBoardParams` failure path that calls `alert()`.
-- [ ] **Fix:** Since the select elements are populated programmatically (only valid values), this path is unreachable in normal use. Add a no-op console warning instead of an alert:
+- [X] **Verify:** Read `js/main.js`, locate the `validateBoardParams` failure path that calls `alert()`. Confirmed at line ~103: `alert(\`Invalid board settings: ${validation.message}\`)`.
+- [X] **Fix:** Since the select elements are populated programmatically (only valid values), this path is unreachable in normal use. Replaced alert with console.warn:
 
   ```diff
   - alert(`Invalid board settings: ${validation.message}`);
   + console.warn(`Invalid board settings: ${validation.message}`);
   ```
 
-- [ ] **Verify:** `npm test` passes. No UI change in normal operation.
+- [X] **Verify:** `npm test` passes — all 58 tests pass. No UI change in normal operation.
 
 ---
 
