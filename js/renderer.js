@@ -43,11 +43,20 @@ export class Renderer {
     this.container = container;
     this.boardEl = null;
     this.cellEls = [];
-    this.clickTimers = {}; // for single/double click disambiguation
+    this.clickTimers = {}; // { [cellKey]: { status: 'pending'|'dbl', timerId?: number } }
+                            // Stores timeout IDs alongside markers so they can be cleared properly.
     this._init();
   }
 
   _init() {
+    // Explicitly remove old board (and its event listeners) before rebuilding.
+    if (this.boardEl && this.boardEl.parentNode) {
+      this.boardEl.remove();
+    }
+    // Clear pending click timers from the previous game to prevent stale
+    // single-click callbacks firing on unrelated cells of the new board.
+    Object.values(this.clickTimers).forEach(t => { if (t?.timerId != null) clearTimeout(t.timerId); });
+    this.clickTimers = {};
     this.container.innerHTML = '';
     this.boardEl = document.createElement('div');
     this.boardEl.className = 'board';
@@ -100,19 +109,19 @@ export class Renderer {
       const key = cellKey(r, c);
 
       // If we already fired a dblclick for this cell, ignore the click
-      if (this.clickTimers[key] === 'dbl') {
+      if (this.clickTimers[key] && this.clickTimers[key].status === 'dbl') {
         delete this.clickTimers[key];
         return;
       }
 
       // Set a timer: if no second click arrives, treat as single click
-      this.clickTimers[key] = 'pending';
-      setTimeout(() => {
-        if (this.clickTimers[key] === 'pending') {
+      const timerId = setTimeout(() => {
+        if (this.clickTimers[key] && this.clickTimers[key].status === 'pending') {
           delete this.clickTimers[key];
           this._onSingleClick(r, c);
         }
       }, CLICK_DELAY);
+      this.clickTimers[key] = { status: 'pending', timerId };
     });
 
     this.boardEl.addEventListener('dblclick', (e) => {
@@ -123,9 +132,12 @@ export class Renderer {
       const c = parseInt(cell.dataset.col);
       const key = cellKey(r, c);
 
-      // Cancel the single-click timer
-      clearTimeout(this.clickTimers[key]);
-      this.clickTimers[key] = 'dbl';
+      // Cancel the pending single-click timer using its stored timeout ID
+      if (this.clickTimers[key]) {
+        clearTimeout(this.clickTimers[key].timerId);
+        delete this.clickTimers[key];
+      }
+      this.clickTimers[key] = { status: 'dbl' };
 
       this._onDoubleClick(r, c);
     });

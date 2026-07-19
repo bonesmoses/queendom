@@ -39,8 +39,8 @@ Each item is independent and reentrant: run the verify step first; if it passes,
 
 ## Moderate 4 — Stale click listeners on board reuse (`js/renderer.js`)
 
-- [ ] **Verify:** Read `js/renderer.js`, locate `_init()` (~line 50). Confirm it does `this.container.innerHTML = ''` which removes old children (and their captured listeners) before creating new ones.
-- [ ] **Fix:** The current approach works because `innerHTML = ''` dereferences the old board element, allowing GC to collect it along with its closure-bound listeners. Add a defensive explicit cleanup for clarity:
+- [X] **Verify:** Read `js/renderer.js`, locate `_init()` (~line 50). Confirmed: it does `this.container.innerHTML = ''` which removes old children (and their captured listeners) before creating new ones.
+- [X] **Fix:** The current approach works because `innerHTML = ''` dereferences the old board element, allowing GC to collect it along with its closure-bound listeners. Added a defensive explicit cleanup for clarity:
 
   ```js
   _init() {
@@ -52,7 +52,7 @@ Each item is independent and reentrant: run the verify step first; if it passes,
     // ... rest unchanged ...
   ```
 
-- [ ] **Verify:** `npm test` passes. No behavioral change expected — this is a defensive clarification.
+- [X] **Verify:** `npm test` passes — all 58 tests pass. No behavioral change expected — this is a defensive clarification.
 
 ---
 
