@@ -226,8 +226,8 @@ main {
 }
 
 @keyframes flashRed {
-  0% { filter: brightness(3); }
-  100% { filter: brightness(5); }
+  0%   { filter: brightness(3); }
+  100% { filter: brightness(1); }
 }
 
 /* ===== Overlays ===== */

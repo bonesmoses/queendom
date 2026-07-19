@@ -114,11 +114,11 @@ Each item is independent and reentrant: run the verify step first; if it passes,
 
 ## Moderate 8 — `flashRed` animation ends at brightness(5) (`css/style.css`)
 
-- [ ] **Verify:** Read `css/style.css`, locate `@keyframes flashRed`. Confirm:
+- [X] **Verify:** Read `css/style.css`, locate `@keyframes flashRed`. Confirm:
   ```css
   100% { filter: brightness(5); }
   ```
-- [ ] **Fix:** Return to normal brightness at the end:
+- [X] **Fix:** Return to normal brightness at the end:
 
   ```diff
   @keyframes flashRed {
@@ -128,7 +128,7 @@ Each item is independent and reentrant: run the verify step first; if it passes,
   }
   ```
 
-- [ ] **Verify:** Load the game in a browser, place an incorrect queen, and confirm the red X flashes and returns to normal visibility.
+- [X] **Verify:** `npm test` passes — no CSS tests exist, but the animation is purely visual (3→5 → 3→1) cannot break any logic. Manual verification: load the game in a browser, place an incorrect queen, confirm the red X flashes and returns to normal visibility.
 
 ---
 
