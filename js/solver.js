@@ -495,7 +495,7 @@ export function applyForcingChains(state) {
     }
 
     let cChanged = true, stalls = 0;
-    while (cChanged && !isContradiction(clone) && stalls < 3) {
+    while (cChanged && !isContradiction(clone) && stalls < 5) {
       cChanged = false;
       for (const fn of [applyNakedSingles, applyHiddenSingles, applyRegionConfinement,
                         applyPigeonhole, applyAdjacencyBlocking, applyRowColIntersection]) {

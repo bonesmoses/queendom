@@ -58,20 +58,20 @@ Each item is independent and reentrant: run the verify step first; if it passes,
 
 ## Moderate 5 — Forcing chain stall threshold asymmetry (`js/solver.js`)
 
-- [ ] **Verify:** Read `js/solver.js`, locate the inner loop inside `applyForcingChains` (~line 380):
+- [X] **Verify:** Read `js/solver.js`, locate the inner loop inside `applyForcingChains` (~line 380):
   ```js
   while (cChanged && !isContradiction(clone) && stalls < 3) {
   ```
   Compare with the outer solve loop's `stalls >= 3` break. Confirm both use 3 as the threshold.
 
-- [ ] **Fix:** Increase the inner stall limit to 5 for parity and reduce false "unsolved" reports:
+- [X] **Fix:** Increase the inner stall limit to 5 for parity and reduce false "unsolved" reports:
 
   ```diff
   - while (cChanged && !isContradiction(clone) && stalls < 3) {
   + while (cChanged && !isContradiction(clone) && stalls < 5) {
   ```
 
-- [ ] **Verify:** `npm test` passes. The difficulty validation tests (`solver.test.js`) exercise forcing chains and will catch regressions.
+- [X] **Verify:** `npm test` passes. The difficulty validation tests (`solver.test.js`) exercise forcing chains and will catch regressions.
 
 ---
 
