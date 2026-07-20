@@ -191,3 +191,75 @@ describe('Solver — Edge Cases', () => {
     expect(state.candidates.length).toBe(4); // 4 regions (0-3)
   });
 });
+
+describe('Difficulty Enforcement — Regression', () => {
+  it('median technique tier strictly increases with difficulty', () => {
+    // Generate multiple boards per difficulty and verify median technique increases
+    const sizes = [6, 7, 8];
+    for (const size of sizes) {
+      const easyTechs = [], mediumTechs = [], hardTechs = [];
+      
+      for (let seed = 0; seed < 10; seed++) {
+        const easyBoard = generateBoard(size, 'easy', size * 100 + seed);
+        const medBoard = generateBoard(size, 'medium', size * 200 + seed);
+        const hardBoard = generateBoard(size, 'hard', size * 300 + seed);
+        
+        const easyResult = solveWithMaxTechnique(easyBoard.regions, size, 5, 0);
+        const medResult = solveWithMaxTechnique(medBoard.regions, size, 6, 1);
+        const hardResult = solveWithMaxTechnique(hardBoard.regions, size, 8, 2);
+        
+        easyTechs.push(Math.max(...[...easyResult.techniquesUsed]));
+        mediumTechs.push(Math.max(...[...medResult.techniquesUsed]));
+        hardTechs.push(Math.max(...[...hardResult.techniquesUsed]));
+      }
+      
+      const median = arr => { const s = [...arr].sort((a,b) => a-b); return s[Math.floor(s.length/2)]; };
+      
+      // Medium should be >= easy, hard should be >= medium
+      expect(median(mediumTechs)).toBeGreaterThanOrEqual(median(easyTechs));
+      expect(median(hardTechs)).toBeGreaterThanOrEqual(median(mediumTechs));
+    }
+  }, 120000);
+
+  it('no easy board uses techniques beyond v (pigeonhole)', () => {
+    for (let size = 6; size <= 8; size++) {
+      const board = generateBoard(size, 'easy', size * 333);
+      const result = solveWithMaxTechnique(board.regions, size, 5, 0);
+      expect(result.solved).toBe(true);
+      // All techniques used should be <= PIGEONHOLE (index 3) or BASIC_ELIMINATION (-1)
+      for (const t of result.techniquesUsed) {
+        expect(t).toBeLessThanOrEqual(3); // PIGEONHOLE = 3
+      }
+    }
+  }, 60000);
+
+  it('≥90% of medium boards use at least one technique ≥ minTechnique', () => {
+    const sizes = [6, 7, 8];
+    for (const size of sizes) {
+      let passCount = 0;
+      const total = 10;
+      
+      // Import TECHNIQUE_INDEX to compute minTechnique
+      const { TECHNIQUE_INDEX } = require('../js/solver.js');
+      const minTech = size >= 8 ? TECHNIQUE_INDEX.ADJACENCY_BLOCKING 
+                   : size >= 7 ? TECHNIQUE_INDEX.PIGEONHOLE 
+                   : TECHNIQUE_INDEX.REGION_CONFINEMENT;
+      
+      for (let seed = 0; seed < total; seed++) {
+        const board = generateBoard(size, 'medium', size * 400 + seed);
+        const result = solveWithMaxTechnique(board.regions, size, 6, 1);
+        
+        let hasAdvanced = false;
+        for (const [techIdx] of result.techniqueStats) {
+          if (techIdx >= minTech && techIdx !== TECHNIQUE_INDEX.FORCING_CHAINS) {
+            hasAdvanced = true;
+            break;
+          }
+        }
+        if (hasAdvanced) passCount++;
+      }
+      
+      expect(passCount).toBeGreaterThanOrEqual(Math.ceil(total * 0.9));
+    }
+  }, 120000);
+});

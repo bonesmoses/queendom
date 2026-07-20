@@ -556,7 +556,7 @@ const TECHNIQUES = [
 
 // Explicit index mapping — each value matches its position in TECHNIQUES[].
 // BASIC_ELIMINATION (-1) is not in the array; it runs unconditionally before the loop.
-const TECHNIQUE_INDEX = /** @type {Readonly<Record<string, number>>} */ ({
+export const TECHNIQUE_INDEX = /** @type {Readonly<Record<string, number>>} */ ({
   BASIC_ELIMINATION:    -1,
   NAKED_SINGLES:        0,
   HIDDEN_SINGLES:       1,
@@ -574,14 +574,35 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
   // Track how many times forcing chains has been used (independent of availability)
   let forcingUsed = 0;
 
+  // Track which techniques actually made progress (for difficulty enforcement).
+  // Values match TECHNIQUE_INDEX: -1=basic elim, 0=ii, 1=iii, …, 6=viii.
+  const techniquesUsed = new Set();
+
+  // Per-technique stats — maps technique index → { placements, eliminations }.
+  const techniqueStats = new Map();
+
   while (!isSolved(state) && !isContradiction(state)) {
     changed = false;
 
     // Technique i (basic elimination) always runs first
+    const placedBeforeElim = state.placed.size;
+    let totalCandidatesBefore = 0;
+    for (const c of state.candidates) totalCandidatesBefore += c.size;
     const elimResult = applyBasicElimination(state);
-    if (elimResult.changed) changed = true;
+    if (elimResult.changed) {
+      changed = true;
+      techniquesUsed.add(TECHNIQUE_INDEX.BASIC_ELIMINATION);
+      let totalCandidatesAfter = 0;
+      for (const c of state.candidates) totalCandidatesAfter += c.size;
+      const eliminationsByElim = totalCandidatesBefore - totalCandidatesAfter;
+      const prev = techniqueStats.get(TECHNIQUE_INDEX.BASIC_ELIMINATION) || { placements: 0, eliminations: 0 };
+      techniqueStats.set(TECHNIQUE_INDEX.BASIC_ELIMINATION, {
+        placements: prev.placements + (state.placed.size - placedBeforeElim),
+        eliminations: prev.eliminations + eliminationsByElim,
+      });
+    }
     if (elimResult.contradiction)
-      return { solved: false, placements: null, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
+      return { solved: false, placements: null, techniqueStats, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
     // Early exit: if basic elimination alone solved it, skip the technique loop.
     if (isSolved(state)) break;
 
@@ -591,18 +612,34 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
       // Technique viii is forcing chains — respect the usage cap
       if (ti === TECHNIQUE_INDEX.FORCING_CHAINS && forcingUsed >= maxForcing) continue;
 
+      const placedBefore = state.placed.size;
+      let totalCandidatesBefore = 0;
+      for (const c of state.candidates) totalCandidatesBefore += c.size;
       const result = TECHNIQUES[ti](state);
       if (ti === TECHNIQUE_INDEX.FORCING_CHAINS) forcingUsed++;
-      if (result.changed) { changed = true; break; }
+      if (result.changed) {
+        changed = true;
+        techniquesUsed.add(ti); // ti=0 → NAKED_SINGLES index 0, not ti+1
+        let totalCandidatesAfter = 0;
+        for (const c of state.candidates) totalCandidatesAfter += c.size;
+        const eliminationsByThisTech = totalCandidatesBefore - totalCandidatesAfter;
+        const prev = techniqueStats.get(ti) || { placements: 0, eliminations: 0 };
+        techniqueStats.set(ti, {
+          placements: prev.placements + (state.placed.size - placedBefore),
+          eliminations: prev.eliminations + eliminationsByThisTech,
+        });
+        break;
+      }
       if (result.contradiction)
-        return { solved: false, placements: null, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
+        return { solved: false, placements: null, techniqueStats, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
     }
 
     if (!changed) { stalls++; if (stalls >= 3) break; }
     else stalls = 0;
   }
 
-  if (isSolved(state)) return { solved: true, placements: state.placed };
+  if (isSolved(state))
+    return { solved: true, placements: state.placed, techniqueStats, techniquesUsed };
 
   // Gather diagnostics for failed solves — useful for guided mutation
   const unplaced = [];
@@ -618,6 +655,7 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
   return {
     solved: false,
     placements: null,
+    techniqueStats,
     diagnostics: {
       placed: state.placed.size,
       totalRegions: state.size,
@@ -629,5 +667,7 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
 }
 
 export function solve(regions, size) {
-  return solveWithMaxTechnique(regions, size, 8);
+  const result = solveWithMaxTechnique(regions, size, 8);
+  // For backward compatibility, the plain solve() still returns { solved, placements }.
+  return { solved: result.solved, placements: result.placements };
 }

@@ -3,7 +3,7 @@
 // can recover the solution. Regions are shaped to create tight constraints.
 
 import { createRng, rngInt, rngFloat, rngShuffle } from './prng.js';
-import { solveWithMaxTechnique } from './solver.js';
+import { solveWithMaxTechnique, TECHNIQUE_INDEX } from './solver.js';
 
 export const Difficulty = Object.freeze({
   EASY: 'easy',
@@ -20,9 +20,11 @@ const MIN_SMALL_REGIONS_FRACTION = 0.2;
 
 // Each difficulty specifies:
 //   maxTechnique — highest solver technique allowed (1–8)
+//   minAdvancedFraction — fraction of total eliminations+placements that must come from
+//                         advanced techniques (index >= minTechnique, excluding forcing chains)
 //   maxForcing   — how many times forcing chains (tech viii) may fire
 const DIFF_CONFIG = {
-  [Difficulty.EASY]:  { maxTechnique: 5, maxForcing: 0 },
+  [Difficulty.EASY]:   { maxTechnique: 5, maxForcing: 0 },
   [Difficulty.MEDIUM]: { maxTechnique: 6, maxForcing: 1 },
   [Difficulty.HARD]:  { maxTechnique: 8, maxForcing: 2 },
 };
@@ -38,8 +40,10 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
   let attempt = 0;
   // Larger boards need more attempts to find valid configurations.
   let maxAttempts;
-  if (size >= 12) maxAttempts = 50000;
-  else if (size >= 9) maxAttempts = 20000;
+  // Hard difficulty on large boards needs more attempts due to stricter isHardEnough check.
+  const hardFactor = difficulty === 'hard' ? 2 : 1;
+  if (size >= 12) maxAttempts = 50000 * hardFactor;
+  else if (size >= 9) maxAttempts = 20000 * hardFactor;
   else maxAttempts = 10000;
 
   while (attempt < maxAttempts) {
@@ -56,13 +60,29 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
 
     // Validate solvability within the difficulty's constraints
     const config = DIFF_CONFIG[difficulty];
+    const minTech = getMinTechnique(difficulty, size);
 
     // Cheap pre-filter — reject obviously bad boards before running the solver
     if (!preFilter(regions, size)) { attempt++; continue; }
 
+    // Fast rejection: skip boards where all regions are small + row-confined.
+    // These trivially solve via naked singles cascades (basic elimination only)
+    // and will never pass isHardEnough for medium/hard — saving solver time.
+    if (minTech > TECHNIQUE_INDEX.BASIC_ELIMINATION && looksTrivial(regions, size)) {
+      attempt++; continue;
+    }
+
     const result = solveWithMaxTechnique(regions, size, config.maxTechnique, config.maxForcing);
     if (result.solved) {
-      return { regions, solution, seed: seed + attempt * 1000 };
+      // Check that the board actually requires techniques at or above minTechnique.
+      if (isHardEnough(result.techniqueStats, result.placements.size, minTech)) {
+        return { regions, solution, seed: seed + attempt * 1000 };
+      }
+      // Board is too easy — try loosening mutations before discarding
+      const loosenResult = tryLoosenAndSolve(regions, size, difficulty, config, minTech, rng);
+      if (loosenResult) {
+        return { regions: loosenResult.regions, solution: loosenResult.solution, seed: seed + attempt * 1000 };
+      }
     }
 
     // If the solver got close, try mutating the board instead of starting over
@@ -75,12 +95,14 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
         if (!validateRegions(regions, size)) { mutations++; continue; }
         const mutatedResult = solveWithMaxTechnique(regions, size, config.maxTechnique, config.maxForcing);
         if (mutatedResult.solved) {
-          const newSolution = new Array(size);
-          for (const [regId, cellKey] of mutatedResult.placements) {
-            const key = Number(cellKey);
-            newSolution[Number(regId)] = [Math.floor(key / 100), key % 100];
+          if (isHardEnough(mutatedResult.techniqueStats, mutatedResult.placements.size, minTech)) {
+            const newSolution = new Array(size);
+            for (const [regId, cellKey] of mutatedResult.placements) {
+              const key = Number(cellKey);
+              newSolution[Number(regId)] = [Math.floor(key / 100), key % 100];
+            }
+            return { regions, solution: newSolution, seed: seed + attempt * 1000 };
           }
-          return { regions, solution: newSolution, seed: seed + attempt * 1000 };
         }
         mutations++;
       }
@@ -210,20 +232,30 @@ function designRegions(size, solution, difficulty, rng) {
   // Number and sizes of anchor regions depend on difficulty.
   // Anchors are tiny (2-3 cells), confined to their queen's row → naked singles.
   let nAnchors, maxNonAnchor;
+  // Tuned empirically via profile-anchors.mjs.
+  // Fewer anchors + larger non-anchors → harder boards (larger regions require
+  // advanced techniques like adjacency blocking). But too few anchors produces
+  // unsolvable boards — stay at the solvability boundary.
   switch (difficulty) {
     case 'easy':
-      // All regions must be small for basic techniques. Use all anchors.
-      nAnchors = size; // every region is an anchor
+      nAnchors = size;
       maxNonAnchor = size <= 8 ? 7 : size <= 10 ? 9 : 12;
       break;
     case 'medium':
-      nAnchors = size >= 10 ? Math.ceil(size * 0.6)
+      // ~40-60% anchors, moderate non-anchor sizes.
+      // At size≥8 the solvability boundary is ~4 anchors; don't go below that.
+      nAnchors = size >= 10 ? Math.ceil(size * 0.5)
+               : size >= 8 ? Math.max(4, Math.ceil(size * 0.5))
                : Math.ceil(size * 0.45);
-      maxNonAnchor = size <= 8 ? 12 : size <= 10 ? 15 : 18;
+      maxNonAnchor = size <= 8 ? 12 : size <= 10 ? 16 : 20;
       break;
     default: // hard
-      nAnchors = Math.ceil(size * 0.3);
-      maxNonAnchor = size <= 8 ? 15 : size <= 10 ? 20 : 25;
+      // ~30% anchors, large non-anchors.
+      // At size≥9 the solvability boundary is ~3 anchors; don't go below that.
+      nAnchors = size >= 10 ? Math.max(3, Math.ceil(size * 0.25))
+               : size >= 8 ? Math.max(3, Math.ceil(size * 0.3))
+               : Math.ceil(size * 0.3);
+      maxNonAnchor = size <= 8 ? 16 : size <= 10 ? 24 : 30;
   }
 
   // Pick anchor regions (random subset)
@@ -534,8 +566,208 @@ export function areRegionsConnected(regions, size) {
   return true;
 }
 
+/**
+ * Fast pre-check: does this board look trivially easy?
+ *
+ * A board is "trivial" when most regions are small (≤ threshold) AND confined
+ * to their queen's row. Such boards solve via naked singles cascades alone.
+ *
+ * Returns true if ≥70% of regions are both small and row-confined.
+ */
+function looksTrivial(regions, size) {
+  const solution = new Array(size);
+  for (let r = 0; r < size; r++)
+    for (let c = 0; c < size; c++)
+      if (regions[r][c] >= 0 && !solution[regions[r][c]])
+        solution[regions[r][c]] = [r, c];
+
+  let trivialCount = 0;
+  const threshold = Math.max(4, Math.floor(size * 0.6)); // region size cutoff
+
+  for (let regId = 0; regId < size; regId++) {
+    const cells = [];
+    for (let r = 0; r < size; r++)
+      for (let c = 0; c < size; c++)
+        if (regions[r][c] === regId) cells.push([r, c]);
+
+    if (cells.length <= threshold) {
+      // Check if confined to queen's row
+      const qr = solution[regId]?.[0];
+      if (qr !== undefined && cells.every(([cr]) => cr === qr)) {
+        trivialCount++;
+      }
+    }
+  }
+
+  return trivialCount >= Math.ceil(size * 0.7);
+}
+
+/**
+ * Compute the minimum technique index required for a given difficulty and board size.
+ *
+ * On small boards the constraint space is limited — even well-designed regions
+ * may solve via basic elimination cascades (naked singles → hidden singles →
+ * region confinement). The realistic ceiling is roughly:
+ *   6×6: tech iv (region confinement, index 2)
+ *   7×7: tech v (pigeonhole, index 3)
+ *   8×8: tech vi (adjacency blocking, index 4)
+ *   9×9+: tech vii+ (row/col intersection, index 5+)
+ *
+ * Returns TECHNIQUE_INDEX values.
+ */
+function getMinTechnique(difficulty, size) {
+  switch (difficulty) {
+    case 'easy':
+      return TECHNIQUE_INDEX.BASIC_ELIMINATION; // no minimum
+    case 'medium':
+      if (size >= 8) return TECHNIQUE_INDEX.ADJACENCY_BLOCKING;
+      if (size >= 7) return TECHNIQUE_INDEX.PIGEONHOLE;
+      return TECHNIQUE_INDEX.REGION_CONFINEMENT; // 6×6
+    default: // hard
+      // On size≥9 boards, row/col intersection (tech vii) rarely fires on
+      // solvable boards — the constraint space is too large for pure logical
+      // deduction without forcing chains. Accept adjacency blocking as the
+      // minimum, with forcing chains as a bonus indicator of genuine hardness.
+      if (size >= 7) return TECHNIQUE_INDEX.ADJACENCY_BLOCKING;
+      return TECHNIQUE_INDEX.PIGEONHOLE; // 6×6
+  }
+}
+
+/**
+ * Check whether a board's technique stats meet the difficulty threshold.
+ *
+ * A board is "hard enough" when:
+ * 1. At least one technique ≥ minTechnique was used AND contributed work,
+ *    OR forcing chains were used (which indicates genuine hardness).
+ *
+ * We use eliminations as the primary signal because elimination-only techniques
+ * (region confinement, adjacency blocking) remove candidates that enable
+ * naked singles to fire — they don't place queens directly.
+ */
+function isHardEnough(techniqueStats, totalPlacements, minTechnique) {
+  if (minTechnique === TECHNIQUE_INDEX.BASIC_ELIMINATION) return true;
+
+  for (const [techIdx, stats] of techniqueStats) {
+    // Forcing chains always count as hard enough.
+    if (techIdx === TECHNIQUE_INDEX.FORCING_CHAINS && (stats.placements + stats.eliminations) > 0) {
+      return true;
+    }
+    // Any other advanced technique with meaningful work counts.
+    if (techIdx >= minTechnique) {
+      const work = stats.placements + stats.eliminations;
+      if (work >= 1) return true;
+    }
+  }
+
+  return false;
+}
+
 // ===========================================================================
-// Note: difficulty is controlled by designRegions() — fewer anchors and larger
-// non-anchor regions for harder difficulties naturally produce boards that
-// require advanced solver techniques. No post-hoc technique check needed.
+// Difficulty enforcement — check that a board requires the minimum technique
 // ===========================================================================
+
+/**
+ * Try loosening region boundaries to make an "easy" board harder.
+ * Expands small anchor regions by stealing cells from neighbors, then re-solves.
+ */
+function tryLoosenAndSolve(regions, size, difficulty, config, minTech, rng) {
+  const maxMutations = 30;
+
+  for (let m = 0; m < maxMutations; m++) {
+    const mutated = regions.map(row => [...row]);
+    loosenRegions(mutated, size, rng);
+
+    if (!validateRegions(mutated, size)) continue;
+
+    const result = solveWithMaxTechnique(mutated, size, config.maxTechnique, config.maxForcing);
+    if (result.solved && isHardEnough(result.techniqueStats, result.placements.size, minTech)) {
+      const newSolution = new Array(size);
+      for (const [regId, cellKey] of result.placements) {
+        const key = Number(cellKey);
+        newSolution[Number(regId)] = [Math.floor(key / 100), key % 100];
+      }
+      return { regions: mutated, solution: newSolution };
+    }
+  }
+  return null;
+}
+
+/**
+ * Expand small regions by stealing cells from neighbors.
+ * Targets the "easiest" regions (small + row-confined) to break tight constraints.
+ */
+function loosenRegions(regions, size, rng) {
+  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+  // Apply up to 5 cell moves per call (increased from 3 for stronger effect)
+  for (let step = 0; step < 5; step++) {
+    const regCells = new Map();
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const id = regions[r][c];
+        if (!regCells.has(id)) regCells.set(id, []);
+        regCells.get(id).push([r, c]);
+      }
+    }
+
+    // Score regions by "easiness": small + row-confined = easiest (lowest score)
+    const scored = [...regCells.entries()].map(([id, cells]) => {
+      let score = 0;
+      if (cells.length <= 3) score -= 10;
+      const rows = new Set(cells.map(c => c[0]));
+      if (rows.size === 1) score -= 5; // confined to one row
+      return { id, cells, score };
+    });
+
+    // Sort by score ascending — target easiest regions first
+    scored.sort((a, b) => a.score - b.score);
+
+    let didMove = false;
+    for (const { id: targetRegId, cells } of scored) {
+      if (cells.length > size + 2) break; // skip large regions
+
+      // Find boundary cells and steal one from a neighbor
+      const boundaryCells = [];
+      for (const [r, c] of cells) {
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < size && nc >= 0 && nc < size && regions[nr][nc] !== targetRegId) {
+            boundaryCells.push([r, c]);
+            break;
+          }
+        }
+      }
+
+      if (boundaryCells.length === 0) continue;
+
+      const [mr, mc] = boundaryCells[rngInt(rng, 0, boundaryCells.length)];
+
+      // Find adjacent donor regions
+      const adjRegions = new Set();
+      for (const [dr, dc] of dirs) {
+        const nr = mr + dr, nc = mc + dc;
+        if (nr >= 0 && nr < size && nc >= 0 && nc < size && regions[nr][nc] !== targetRegId) {
+          adjRegions.add(regions[nr][nc]);
+        }
+      }
+
+      if (adjRegions.size === 0) continue;
+
+      const donorRegion = [...adjRegions][rngInt(rng, 0, adjRegions.length)];
+
+      // Find a cell in donor adjacent to boundary cell and move it
+      for (const [dr, dc] of dirs) {
+        const nr = mr + dr, nc = mc + dc;
+        if (nr >= 0 && nr < size && nc >= 0 && nc < size && regions[nr][nc] === donorRegion) {
+          regions[nr][nc] = targetRegId;
+          didMove = true;
+          break;
+        }
+      }
+
+      if (didMove) break;
+    }
+
+    if (!didMove) break;
+  }
+}
