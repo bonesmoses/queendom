@@ -224,32 +224,25 @@ function designRegions(size, solution, difficulty, rng) {
 
   // Number and sizes of anchor regions depend on difficulty.
   // Anchors are tiny (2-3 cells), confined to their queen's row → naked singles.
-  let nAnchors, maxNonAnchor;
-  // Tuned empirically via profile-anchors.mjs.
+  let nAnchors, maxNonAnchor, nAdjust;
+
   // Fewer anchors + larger non-anchors → harder boards (larger regions require
   // advanced techniques like adjacency blocking). But too few anchors produces
   // unsolvable boards — stay at the solvability boundary.
   switch (difficulty) {
     case 'easy':
-      nAnchors = size;
-      maxNonAnchor = size <= 8 ? 7 : size <= 10 ? 9 : 12;
+      nAdjust = 0.5;
       break;
-    case 'medium':
-      // ~40-60% anchors, moderate non-anchor sizes.
-      // At size≥8 the solvability boundary is ~4 anchors; don't go below that.
-      nAnchors = size >= 10 ? Math.ceil(size * 0.5)
-               : size >= 8 ? Math.max(4, Math.ceil(size * 0.5))
-               : Math.ceil(size * 0.45);
-      maxNonAnchor = size <= 8 ? 12 : size <= 10 ? 16 : 20;
+    case 'hard':
+      nAdjust = 0.3;
       break;
-    default: // hard
-      // ~30% anchors, large non-anchors.
-      // At size≥9 the solvability boundary is ~3 anchors; don't go below that.
-      nAnchors = size >= 10 ? Math.max(3, Math.ceil(size * 0.25))
-               : size >= 8 ? Math.max(3, Math.ceil(size * 0.3))
-               : Math.ceil(size * 0.3);
-      maxNonAnchor = size <= 8 ? 16 : size <= 10 ? 24 : 30;
+    default: // medium
+      nAdjust = 0.4;
+      break;
   }
+
+  nAnchors = Math.ceil(size * nAdjust);
+  maxNonAnchor = ((size * size) - (2 * nAnchors)) / (size - nAnchors);
 
   // Pick anchor regions (random subset)
   const indices = rngShuffle(Array.from({ length: size }, (_, i) => i), rng);
