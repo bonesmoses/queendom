@@ -2,7 +2,7 @@
 // Each technique returns { changed: boolean, contradiction: boolean }.
 
 // Forcing chain limits — keep small to avoid exponential blow-up during board generation.
-const MAX_FORCING_CANDIDATE_SET_SIZE = 7; // Don't attempt forcing on regions with >N candidates
+const MAX_FORCING_CANDIDATE_SET_SIZE = 5; // Skip forcing if best region has >N candidates
 const MAX_FORCING_CANDIDATES_TO_TEST = 6; // Only test up to N candidates per region
 
 import { cellKey, cellPos } from './cell.js';
@@ -477,6 +477,13 @@ export function applyRowColIntersection(state) {
 export function applyForcingChains(state) {
   let changed = false;
 
+  // Candidate count gate (Opt 2 #1): skip forcing entirely if no region has <=5 candidates.
+  for (let i = 0; i < state.size; i++) {
+    if (!state.placed.has(i) && state.candidates[i].size > 1 && state.candidates[i].size <= MAX_FORCING_CANDIDATE_SET_SIZE)
+      break;
+    if (i === state.size - 1) return { changed, contradiction: false };
+  }
+
   let bestReg = -1, bestCount = Infinity;
   for (let i = 0; i < state.size; i++) {
     if (!state.placed.has(i) && state.candidates[i].size > 1 && state.candidates[i].size < bestCount) {
@@ -484,7 +491,7 @@ export function applyForcingChains(state) {
     }
   }
 
-  // Tighten threshold: only attempt forcing when candidate set is small
+  // Fallback threshold check (redundant after gate above, kept for safety)
   if (bestReg === -1 || bestCount > MAX_FORCING_CANDIDATE_SET_SIZE) return { changed, contradiction: false };
 
   // Only test up to a subset of candidates — testing all is expensive and diminishing returns
@@ -493,21 +500,28 @@ export function applyForcingChains(state) {
     const clone = cloneState(state);
     clone.placed.set(bestReg, candKey);
     applyBasicElimination(clone);
+
+    // Rapid contradiction check (Opt 2 #2): exit immediately if basic elim creates a contradiction.
     if (isContradiction(clone)) {
       if (state.candidates[bestReg].delete(candKey)) changed = true;
       continue;
     }
 
-    let cChanged = true, stalls = 0;
-    while (cChanged && !isContradiction(clone) && stalls < 5) {
-      cChanged = false;
+    // This bit of code is actually very important. The idea is to apply simple solve
+    // techniques as a first pass. If these techniques get stuck or lead to a contradiction,
+    // we can early-exit. Any single pass through all techniques that makes no progress counts
+    // as being "stuck".
+
+    let stalled = false;
+    while (!stalled && !isContradiction(clone)) {
+      let cChanged = false;
       for (const fn of [applyNakedSingles, applyHiddenSingles, applyRegionConfinement,
                         applyPigeonhole, applyAdjacencyBlocking, applyRowColIntersection]) {
         const r = fn(clone);
-        if (r.changed) cChanged = true;
+        cChanged = r.changed;
         if (r.contradiction) break;
       }
-      if (!cChanged) stalls++;
+      stalled = !cChanged;
     }
 
     if (isContradiction(clone) && state.candidates[bestReg].delete(candKey)) changed = true;
@@ -569,7 +583,6 @@ export const TECHNIQUE_INDEX = /** @type {Readonly<Record<string, number>>} */ (
 
 export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcing = Infinity) {
   const state = createSolverState(regions, size);
-  let changed = true, stalls = 0;
 
   // Track how many times forcing chains has been used (independent of availability)
   let forcingUsed = 0;
@@ -582,7 +595,7 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
   const techniqueStats = new Map();
 
   while (!isSolved(state) && !isContradiction(state)) {
-    changed = false;
+    let anyChanged = false;
 
     // Technique i (basic elimination) always runs first
     const placedBeforeElim = state.placed.size;
@@ -590,7 +603,7 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
     for (const c of state.candidates) totalCandidatesBefore += c.size;
     const elimResult = applyBasicElimination(state);
     if (elimResult.changed) {
-      changed = true;
+      anyChanged = true;
       techniquesUsed.add(TECHNIQUE_INDEX.BASIC_ELIMINATION);
       let totalCandidatesAfter = 0;
       for (const c of state.candidates) totalCandidatesAfter += c.size;
@@ -603,8 +616,6 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
     }
     if (elimResult.contradiction)
       return { solved: false, placements: null, techniqueStats, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
-    // Early exit: if basic elimination alone solved it, skip the technique loop.
-    if (isSolved(state)) break;
 
     // Run techniques up to maxTechnique (1=none beyond basic, 8=all)
     const techLimit = Math.min(maxTechnique - 1, TECHNIQUES.length);
@@ -618,8 +629,8 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
       const result = TECHNIQUES[ti](state);
       if (ti === TECHNIQUE_INDEX.FORCING_CHAINS) forcingUsed++;
       if (result.changed) {
-        changed = true;
-        techniquesUsed.add(ti); // ti=0 → NAKED_SINGLES index 0, not ti+1
+        anyChanged = true;
+        techniquesUsed.add(ti);
         let totalCandidatesAfter = 0;
         for (const c of state.candidates) totalCandidatesAfter += c.size;
         const eliminationsByThisTech = totalCandidatesBefore - totalCandidatesAfter;
@@ -634,8 +645,8 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
         return { solved: false, placements: null, techniqueStats, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
     }
 
-    if (!changed) { stalls++; if (stalls >= 3) break; }
-    else stalls = 0;
+    // Exit if no technique made progress in this pass
+    if (!anyChanged) break;
   }
 
   if (isSolved(state))
