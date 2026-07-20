@@ -617,19 +617,13 @@ function looksTrivial(regions, size) {
  */
 function getMinTechnique(difficulty, size) {
   switch (difficulty) {
+    case 'hard':
+      return TECHNIQUE_INDEX.ROW_COL_INTERSECTION;
     case 'easy':
-      return TECHNIQUE_INDEX.BASIC_ELIMINATION; // no minimum
+      return TECHNIQUE_INDEX.BASIC_ELIMINATION;
     case 'medium':
-      if (size >= 8) return TECHNIQUE_INDEX.ADJACENCY_BLOCKING;
-      if (size >= 7) return TECHNIQUE_INDEX.PIGEONHOLE;
-      return TECHNIQUE_INDEX.REGION_CONFINEMENT; // 6×6
-    default: // hard
-      // On size≥9 boards, row/col intersection (tech vii) rarely fires on
-      // solvable boards — the constraint space is too large for pure logical
-      // deduction without forcing chains. Accept adjacency blocking as the
-      // minimum, with forcing chains as a bonus indicator of genuine hardness.
-      if (size >= 7) return TECHNIQUE_INDEX.ADJACENCY_BLOCKING;
-      return TECHNIQUE_INDEX.PIGEONHOLE; // 6×6
+    default:
+      return TECHNIQUE_INDEX.ADJACENCY_BLOCKING;
   }
 }
 

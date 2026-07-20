@@ -3,7 +3,7 @@
 
 // Forcing chain limits — keep small to avoid exponential blow-up during board generation.
 const MAX_FORCING_CANDIDATE_SET_SIZE = 5; // Skip forcing if best region has >N candidates
-const MAX_FORCING_CANDIDATES_TO_TEST = 6; // Only test up to N candidates per region
+const MAX_FORCING_CANDIDATES_TO_TEST = 3; // Only test up to N candidates per region
 
 import { cellKey, cellPos } from './cell.js';
 
@@ -515,8 +515,7 @@ export function applyForcingChains(state) {
     let stalled = false;
     while (!stalled && !isContradiction(clone)) {
       let cChanged = false;
-      for (const fn of [applyNakedSingles, applyHiddenSingles, applyRegionConfinement,
-                        applyPigeonhole, applyAdjacencyBlocking, applyRowColIntersection]) {
+      for (const fn of [applyNakedSingles, applyHiddenSingles, applyRowColIntersection]) {
         const r = fn(clone);
         cChanged = r.changed;
         if (r.contradiction) break;
