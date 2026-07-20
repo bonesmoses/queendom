@@ -243,13 +243,10 @@ export function applyPigeonhole(state) {
   // Cap k at 3 — higher-order combos are exponentially expensive and rarely useful.
   const maxK = Math.min(3, unplaced.length);
   for (let k = 2; k <= maxK; k++) {
-    for (const combo of combinations(unplaced, k)) {
-      // Fast prune: if any region already spans >k rows, this combo can't confine
-      let dominated = false;
-      for (const regId of combo) {
-        if (regRows.get(regId).size > k) { dominated = true; break; }
-      }
-      if (dominated) continue;
+    // Pre-filter: only regions whose row-span ≤ k can participate in a k-grouping.
+    // This eliminates combos that would be pruned immediately by the dominated check.
+    const eligibleRows = unplaced.filter(r => regRows.get(r).size <= k);
+    for (const combo of combinations(eligibleRows, k)) {
 
       const rowSet = new Set();
       for (const regId of combo) {
@@ -272,12 +269,8 @@ export function applyPigeonhole(state) {
 
   // Column groupings — same strategy
   for (let k = 2; k <= maxK; k++) {
-    for (const combo of combinations(unplaced, k)) {
-      let dominated = false;
-      for (const regId of combo) {
-        if (regCols.get(regId).size > k) { dominated = true; break; }
-      }
-      if (dominated) continue;
+    const eligibleCols = unplaced.filter(r => regCols.get(r).size <= k);
+    for (const combo of combinations(eligibleCols, k)) {
 
       const colSet = new Set();
       for (const regId of combo) {
