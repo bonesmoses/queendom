@@ -65,13 +65,6 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
     // Cheap pre-filter — reject obviously bad boards before running the solver
     if (!preFilter(regions, size)) { attempt++; continue; }
 
-    // Fast rejection: skip boards where all regions are small + row-confined.
-    // These trivially solve via naked singles cascades (basic elimination only)
-    // and will never pass isHardEnough for medium/hard — saving solver time.
-    if (minTech > TECHNIQUE_INDEX.BASIC_ELIMINATION && looksTrivial(regions, size)) {
-      attempt++; continue;
-    }
-
     const result = solveWithMaxTechnique(regions, size, config.maxTechnique, config.maxForcing);
     if (result.solved) {
       // Check that the board actually requires techniques at or above minTechnique.
@@ -564,42 +557,6 @@ export function areRegionsConnected(regions, size) {
   for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) ids.add(regions[r][c]);
   for (const id of ids) if (!isRegionConnected(regions, size, id)) return false;
   return true;
-}
-
-/**
- * Fast pre-check: does this board look trivially easy?
- *
- * A board is "trivial" when most regions are small (≤ threshold) AND confined
- * to their queen's row. Such boards solve via naked singles cascades alone.
- *
- * Returns true if ≥70% of regions are both small and row-confined.
- */
-function looksTrivial(regions, size) {
-  const solution = new Array(size);
-  for (let r = 0; r < size; r++)
-    for (let c = 0; c < size; c++)
-      if (regions[r][c] >= 0 && !solution[regions[r][c]])
-        solution[regions[r][c]] = [r, c];
-
-  let trivialCount = 0;
-  const threshold = Math.max(4, Math.floor(size * 0.6)); // region size cutoff
-
-  for (let regId = 0; regId < size; regId++) {
-    const cells = [];
-    for (let r = 0; r < size; r++)
-      for (let c = 0; c < size; c++)
-        if (regions[r][c] === regId) cells.push([r, c]);
-
-    if (cells.length <= threshold) {
-      // Check if confined to queen's row
-      const qr = solution[regId]?.[0];
-      if (qr !== undefined && cells.every(([cr]) => cr === qr)) {
-        trivialCount++;
-      }
-    }
-  }
-
-  return trivialCount >= Math.ceil(size * 0.7);
 }
 
 /**
