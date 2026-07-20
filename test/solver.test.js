@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import {
   createSolverState,
-  applyBasicElimination,
+  incrementalEliminate,
   applyNakedSingles,
   applyHiddenSingles,
   applyRegionConfinement,
@@ -31,7 +31,7 @@ describe('Solver — Basic Elimination', () => {
     ];
     const state = createSolverState(regions, 6);
     state.placed.set(0, cellKey(0, 0));
-    applyBasicElimination(state);
+    incrementalEliminate(state, new Map([[0, cellKey(0, 0)]]));
 
     expect(state.candidates[0]).toEqual(new Set([cellKey(0, 0)]));
     for (let reg = 1; reg < 6; reg++) {
@@ -54,7 +54,13 @@ describe('Solver — Basic Elimination', () => {
     const state = createSolverState(regions, 6);
     state.placed.set(0, cellKey(0, 0));
     state.placed.set(1, cellKey(1, 3));
-    applyBasicElimination(state);
+    incrementalEliminate(
+      state,
+      new Map([
+        [0, cellKey(0, 0)],
+        [1, cellKey(1, 3)],
+      ])
+    );
 
     expect(state.candidates[0]).toEqual(new Set([cellKey(0, 0)]));
     expect(state.candidates[1]).toEqual(new Set([cellKey(1, 3)]));

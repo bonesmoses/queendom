@@ -68,11 +68,13 @@ function getCandsInCol(cands, c) {
 }
 
 // ===========================================================================
-// TECH i: Basic Elimination from Placement
+// Helper: eliminate row/col/adjacent cells for newly placed queens only
 // ===========================================================================
-export function applyBasicElimination(state) {
+// Export for consumers that need direct incremental elimination (e.g. solver-viewer).
+// The main solve loop applies it internally within each technique that places queens.
+export function incrementalEliminate(state, newPlacements) {
   let changed = false;
-  for (const [regId, cell] of state.placed) {
+  for (const [regId, cell] of newPlacements) {
     const [pr, pc] = cellPos(cell);
     // Same region — keep only this cell
     for (const key of [...state.candidates[regId]]) {
@@ -96,15 +98,15 @@ export function applyBasicElimination(state) {
 // TECH ii: Naked Singles — region with exactly 1 candidate → place queen
 // ===========================================================================
 export function applyNakedSingles(state) {
-  let changed = false;
+  const newPlacements = new Map();
   for (let i = 0; i < state.size; i++) {
     if (!state.placed.has(i) && state.candidates[i].size === 1) {
       state.placed.set(i, [...state.candidates[i]][0]);
-      changed = true;
+      newPlacements.set(i, [...state.candidates[i]][0]);
     }
   }
-  if (changed) applyBasicElimination(state);
-  return { changed, contradiction: isContradiction(state) };
+  const result = incrementalEliminate(state, newPlacements);
+  return { changed: result.changed, contradiction: result.contradiction };
 }
 
 // ===========================================================================
@@ -113,7 +115,7 @@ export function applyNakedSingles(state) {
 // candidates in this row and no other unplaced region does, that region owns the row.
 // ===========================================================================
 export function applyHiddenSingles(state) {
-  let changed = false;
+  const newPlacements = new Map();
 
   // For each row: find which regions have candidates here
   for (let r = 0; r < state.size; r++) {
@@ -127,12 +129,11 @@ export function applyHiddenSingles(state) {
     // If only one region has candidates in this row AND it has exactly 1 → place it
     if (regMap.size === 1) {
       const [regId, cells] = [...regMap][0];
-      if (cells.length === 1) {
+      if (cells.length === 1 && !state.placed.has(regId)) {
         state.placed.set(regId, cells[0]);
-        changed = true;
+        newPlacements.set(regId, cells[0]);
       }
     }
-
   }
 
   // Same for columns
@@ -146,9 +147,9 @@ export function applyHiddenSingles(state) {
 
     if (regMap.size === 1) {
       const [regId, cells] = [...regMap][0];
-      if (cells.length === 1) {
+      if (cells.length === 1 && !state.placed.has(regId)) {
         state.placed.set(regId, cells[0]);
-        changed = true;
+        newPlacements.set(regId, cells[0]);
       }
     }
   }
@@ -158,8 +159,8 @@ export function applyHiddenSingles(state) {
   // If so and only this region can place here → force it.
   // (Already handled above with regMap.size === 1)
 
-  if (changed) applyBasicElimination(state);
-  return { changed, contradiction: isContradiction(state) };
+  const result = incrementalEliminate(state, newPlacements);
+  return { changed: result.changed, contradiction: result.contradiction };
 }
 
 // ===========================================================================
@@ -386,7 +387,7 @@ export function applyAdjacencyBlocking(state) {
 // Also: if two regions share candidates in only one common cell in a row, force it.
 // ===========================================================================
 export function applyRowColIntersection(state) {
-  let changed = false;
+  const newPlacements = new Map();
 
   for (let regId = 0; regId < state.size; regId++) {
     if (state.placed.has(regId)) continue;
@@ -416,9 +417,9 @@ export function applyRowColIntersection(state) {
         if (state.placed.has(other)) continue;
         if (getCandsInRow(state.candidates[other], r).length > 0) regionsInRow++;
       }
-      if (regionsInRow === 1) {
+      if (regionsInRow === 1 && !state.placed.has(regId)) {
         state.placed.set(regId, rowSingleCell.get(r));
-        changed = true;
+        newPlacements.set(regId, rowSingleCell.get(r));
       }
     }
 
@@ -428,9 +429,9 @@ export function applyRowColIntersection(state) {
         if (state.placed.has(other)) continue;
         if (getCandsInCol(state.candidates[other], c).length > 0) regionsInCol++;
       }
-      if (regionsInCol === 1) {
+      if (regionsInCol === 1 && !state.placed.has(regId)) {
         state.placed.set(regId, colSingleCell.get(c));
-        changed = true;
+        newPlacements.set(regId, colSingleCell.get(c));
       }
     }
   }
@@ -455,13 +456,13 @@ export function applyRowColIntersection(state) {
       }
       if (regionsInRow === 1 && !state.placed.has(minReg)) {
         state.placed.set(minReg, cells[0]);
-        changed = true;
+        newPlacements.set(minReg, cells[0]);
       }
     }
   }
 
-  if (changed) applyBasicElimination(state);
-  return { changed, contradiction: isContradiction(state) };
+  const result = incrementalEliminate(state, newPlacements);
+  return { changed: result.changed, contradiction: result.contradiction };
 }
 
 // ===========================================================================
@@ -492,7 +493,7 @@ export function applyForcingChains(state) {
   for (const candKey of cands) {
     const clone = cloneState(state);
     clone.placed.set(bestReg, candKey);
-    applyBasicElimination(clone);
+    incrementalEliminate(clone, new Map([[bestReg, candKey]]));
 
     // Rapid contradiction check (Opt 2 #2): exit immediately if basic elim creates a contradiction.
     if (isContradiction(clone)) {
@@ -589,27 +590,9 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
   while (!isSolved(state) && !isContradiction(state)) {
     let anyChanged = false;
 
-    // Technique i (basic elimination) always runs first
-    const placedBeforeElim = state.placed.size;
-    let totalCandidatesBefore = 0;
-    for (const c of state.candidates) totalCandidatesBefore += c.size;
-    const elimResult = applyBasicElimination(state);
-    if (elimResult.changed) {
-      anyChanged = true;
-      techniquesUsed.add(TECHNIQUE_INDEX.BASIC_ELIMINATION);
-      let totalCandidatesAfter = 0;
-      for (const c of state.candidates) totalCandidatesAfter += c.size;
-      const eliminationsByElim = totalCandidatesBefore - totalCandidatesAfter;
-      const prev = techniqueStats.get(TECHNIQUE_INDEX.BASIC_ELIMINATION) || { placements: 0, eliminations: 0 };
-      techniqueStats.set(TECHNIQUE_INDEX.BASIC_ELIMINATION, {
-        placements: prev.placements + (state.placed.size - placedBeforeElim),
-        eliminations: prev.eliminations + eliminationsByElim,
-      });
-    }
-    if (elimResult.contradiction)
-      return { solved: false, placements: null, techniqueStats, diagnostics: { placed: state.placed.size, totalRegions: state.size, stuckRegions: [], totalCandidates: 0, contradiction: true } };
-
     // Run techniques up to maxTechnique (1=none beyond basic, 8=all)
+    // Basic elimination is now handled incrementally within each technique that places queens.
+    // This eliminates the O(N³) full-scan pass every iteration.
     const techLimit = Math.min(maxTechnique - 1, TECHNIQUES.length);
     for (let ti = 0; ti < techLimit; ti++) {
       // Technique viii is forcing chains — respect the usage cap

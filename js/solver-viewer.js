@@ -3,7 +3,7 @@
 
 import {
   createSolverState,
-  applyBasicElimination,
+  incrementalEliminate,
   applyNakedSingles,
   applyHiddenSingles,
   applyRegionConfinement,
@@ -19,8 +19,9 @@ import {
 
 import { cellKey, cellPos } from './cell.js';
 
+// Note: Basic Elimination is no longer a separate step — it's handled
+// incrementally within each technique that places queens (ii, iii, vii).
 const TECH_NAMES = [
-  'Basic Elimination',
   'Naked Singles',
   'Hidden Singles',
   'Region Confinement',
@@ -30,8 +31,9 @@ const TECH_NAMES = [
   'Forcing Chains',
 ];
 
+// Technique functions — basic elimination is now handled incrementally
+// within each technique that places queens (ii, iii, vii).
 const TECH_FUNCTIONS = [
-  applyBasicElimination,
   applyNakedSingles,
   applyHiddenSingles,
   applyRegionConfinement,
@@ -236,6 +238,8 @@ function buildDetailText(stateBefore, placements, eliminated, totalCands) {
 
 // ---------------------------------------------------------------------------
 // Instrumented solve loop — records every step with full diffs + reasoning
+// Basic elimination is handled incrementally within each technique that places queens.
+// This avoids the O(N³) full-scan that ran on every iteration.
 // ---------------------------------------------------------------------------
 
 export function inspectSolve(regions, size) {
@@ -247,30 +251,10 @@ export function inspectSolve(regions, size) {
   while (!isSolved(state) && !isContradiction(state)) {
     let anyChanged = false;
 
-    // Basic elimination always runs first each round
-    const beforeCandsBasic = snapshotCandidates(state);
-    const beforePlacedBasic = snapshotPlacements(state);
-    const elimResult = applyBasicElimination(state);
-    if (elimResult.changed) anyChanged = true;
-    if (elimResult.contradiction) {
-      steps.push({ step: ++stepNum, technique: 'Basic Elimination', badge: 'contradiction', detail: 'Contradiction detected — board is unsolvable.' });
-      return { solved: false, steps };
-    }
-
-    // Record basic elimination if it did something
-    const afterCandsBasic = snapshotCandidates(state);
-    const afterPlacedBasic = snapshotPlacements(state);
-    if (elimResult.changed) {
-      const placements = diffPlacements(beforePlacedBasic, afterPlacedBasic);
-      const eliminated = diffCandidates(beforeCandsBasic, afterCandsBasic);
-      const beforeState = reconstructBeforeState(beforeCandsBasic, beforePlacedBasic, size);
-      steps.push({ step: ++stepNum, technique: 'Basic Elimination', badge: placements.length ? 'placement' : 'elimination', detail: buildDetailText(beforeState, placements, eliminated, totalCandidates(state)) });
-    }
-
-    if (isSolved(state)) break;
-
-    // Run remaining techniques in order — stop after first one that changes state
-    for (let ti = 1; ti < TECH_FUNCTIONS.length; ti++) {
+    // Run techniques in order — stop after first one that changes state.
+    // Each technique handles its own incremental elimination internally,
+    // so we record combined per-technique changes (placements + eliminations).
+    for (let ti = 0; ti < TECH_FUNCTIONS.length; ti++) {
       const beforeCands = snapshotCandidates(state);
       const beforePlaced = snapshotPlacements(state);
       const result = TECH_FUNCTIONS[ti](state);
