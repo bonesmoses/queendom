@@ -210,7 +210,6 @@ function togglePause() {
   if (game.timerRunning) {
     pauseTimer(game);
     document.getElementById('pause-overlay').className = 'overlay pause-overlay';
-    document.getElementById('btn-pause').textContent = 'Resume';
   } else {
     resumeFromPause();
   }
@@ -221,7 +220,6 @@ function resumeFromPause() {
 
   resumeTimer(game);
   document.getElementById('pause-overlay').className = 'overlay hidden';
-  document.getElementById('btn-pause').textContent = 'Pause';
   renderer.render(); // Re-render to remove pause obscuring
 }
 
@@ -239,7 +237,6 @@ function hideAllOverlays() {
   document.getElementById('pause-overlay').className = 'overlay hidden';
   document.getElementById('game-over-overlay').className = 'overlay hidden';
   document.getElementById('solution-overlay').className = 'solution-overlay hidden';
-  document.getElementById('btn-pause').textContent = 'Pause';
 }
 
 function updateLives() {
