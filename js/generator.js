@@ -3,6 +3,7 @@
 // can recover the solution. Regions are shaped to create tight constraints.
 
 import { createRng, rngInt, rngFloat, rngShuffle } from './prng.js';
+import { cellKey } from './cell.js';
 import { solveWithMaxTechnique, TECHNIQUE_INDEX } from './solver.js';
 
 export const Difficulty = Object.freeze({
@@ -67,6 +68,16 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
 
     const result = solveWithMaxTechnique(regions, size, config.maxTechnique, config.maxForcing);
     if (result.solved) {
+      // Verify solver's placements match the original answer key.
+      let solutionMatches = true;
+      for (let i = 0; i < size && solutionMatches; i++) {
+        const expectedKey = cellKey(solution[i][0], solution[i][1]);
+        if (!result.placements.has(i) || result.placements.get(i) !== expectedKey) {
+          solutionMatches = false;
+        }
+      }
+      if (!solutionMatches) { attempt++; continue; }
+
       // Check that the board actually requires techniques at or above minTechnique.
       if (isHardEnough(result.techniqueStats, result.placements.size, minTech)) {
         return { regions, solution, seed: seed + attempt * 1000 };
