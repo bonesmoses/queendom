@@ -4,7 +4,7 @@
 
 import { createRng, rngInt, rngFloat, rngShuffle } from './prng.js';
 import { cellKey } from './cell.js';
-import { solveWithMaxTechnique, TECHNIQUE_INDEX } from './solver.js';
+import { solveWithUniqueness, TECHNIQUE_INDEX } from './solver.js';
 
 export const Difficulty = Object.freeze({
   EASY: 'easy',
@@ -41,11 +41,12 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
   let attempt = 0;
   // Larger boards need more attempts to find valid configurations.
   let maxAttempts;
-  // Hard difficulty on large boards needs more attempts due to stricter isHardEnough check.
-  const hardFactor = difficulty === 'hard' ? 2 : 1;
-  if (size >= 12) maxAttempts = 50000 * hardFactor;
-  else if (size >= 9) maxAttempts = 20000 * hardFactor;
-  else maxAttempts = 10000;
+  // Hard difficulty on large boards needs more attempts due to stricter isHardEnough check
+  // and uniqueness verification (rejects boards with multiple valid solutions).
+  const hardFactor = difficulty === 'hard' ? 4 : 1;
+  if (size >= 12) maxAttempts = 80000 * hardFactor;
+  else if (size >= 9) maxAttempts = 30000 * hardFactor;
+  else maxAttempts = 20000;
 
   while (attempt < maxAttempts) {
     const rng = createRng(seed + attempt * 1000);
@@ -66,8 +67,8 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
     // Cheap pre-filter — reject obviously bad boards before running the solver
     if (!preFilter(regions, size)) { attempt++; continue; }
 
-    const result = solveWithMaxTechnique(regions, size, config.maxTechnique, config.maxForcing);
-    if (result.solved) {
+    const result = solveWithUniqueness(regions, size, config.maxTechnique, config.maxForcing);
+    if (result.solved && result.unique) {
       // Verify solver's placements match the original answer key.
       let solutionMatches = true;
       for (let i = 0; i < size && solutionMatches; i++) {
@@ -97,8 +98,8 @@ export function generateBoard(size, difficulty = Difficulty.HARD, seed = null) {
       while (mutations < maxMutations) {
         mutateRegions(regions, size, diag.stuckRegions, rng);
         if (!validateRegions(regions, size)) { mutations++; continue; }
-        const mutatedResult = solveWithMaxTechnique(regions, size, config.maxTechnique, config.maxForcing);
-        if (mutatedResult.solved) {
+        const mutatedResult = solveWithUniqueness(regions, size, config.maxTechnique, config.maxForcing);
+        if (mutatedResult.solved && mutatedResult.unique) {
           if (isHardEnough(mutatedResult.techniqueStats, mutatedResult.placements.size, minTech)) {
             const newSolution = new Array(size);
             for (const [regId, cellKey] of mutatedResult.placements) {
@@ -634,8 +635,8 @@ function tryLoosenAndSolve(regions, size, difficulty, config, minTech, rng) {
 
     if (!validateRegions(mutated, size)) continue;
 
-    const result = solveWithMaxTechnique(mutated, size, config.maxTechnique, config.maxForcing);
-    if (result.solved && isHardEnough(result.techniqueStats, result.placements.size, minTech)) {
+    const result = solveWithUniqueness(mutated, size, config.maxTechnique, config.maxForcing);
+    if (result.solved && result.unique && isHardEnough(result.techniqueStats, result.placements.size, minTech)) {
       const newSolution = new Array(size);
       for (const [regId, cellKey] of result.placements) {
         const key = Number(cellKey);

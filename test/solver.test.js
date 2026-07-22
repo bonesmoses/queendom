@@ -12,6 +12,8 @@ import {
   applyForcingChains,
   solve,
   solveWithMaxTechnique,
+  checkUniqueness,
+  solveWithUniqueness,
 } from '../js/solver.js';
 import { generateBoard } from '../js/generator.js';
 
@@ -179,6 +181,170 @@ describe('Solver — Difficulty Validation', () => {
       expect(result.solved).toBe(true);
     }
   }, 60000);
+});
+
+// ===========================================================================
+// Uniqueness Check Tests
+// ===========================================================================
+
+/**
+ * The problematic board reported by the user: a 6x6 hard puzzle that has
+ * two valid completions. This is the canonical example of why uniqueness
+ * verification is needed — forcing chains can eliminate candidates without
+ * placing queens, and if multiple solutions exist neither branch contradicts.
+ */
+const MULTI_SOLUTION_BOARD = {
+  name: 'user-reported-ambiguous-6x6',
+  size: 6,
+  difficulty: 'hard',
+  regions: [
+    [1,0,0,0,0,0],
+    [1,1,1,0,0,0],
+    [1,3,3,3,0,2],
+    [1,3,5,3,3,3],
+    [4,4,5,5,3,3],
+    [5,5,5,5,5,3],
+  ],
+  // First solution found by the logical solver
+  knownSolution: [[0,2],[1,0],[2,5],[3,3],[4,1],[5,4]],
+};
+
+describe('Solver — Uniqueness Check', () => {
+  it('detects multiple solutions in the user-reported ambiguous board', () => {
+    const { regions, size } = MULTI_SOLUTION_BOARD;
+    const result = checkUniqueness(regions, size);
+
+    expect(result.unique).toBe(false);
+    // The solver found exactly two valid completions:
+    //   1. [[0,2],[1,0],[2,5],[3,3],[4,1],[5,4]] (the answer key)
+    //   2. [[0,4],[1,1],[2,5],[3,3],[4,0],[5,2]]
+    expect(result.solutionCount).toBe(2);
+  });
+
+  it('verifies both solutions in the ambiguous board are valid', () => {
+    const { regions, size } = MULTI_SOLUTION_BOARD;
+    // Verify the first solution is valid (the one matching the answer key)
+    const sol1 = [[0,2],[1,0],[2,5],[3,3],[4,1],[5,4]];
+    for (let i = 0; i < size; i++) {
+      const [r, c] = sol1[i];
+      expect(regions[r][c]).toBe(i);
+    }
+
+    // Verify the second solution is also valid
+    const sol2 = [[0,4],[1,1],[2,5],[3,3],[4,0],[5,2]];
+    for (let i = 0; i < size; i++) {
+      const [r, c] = sol2[i];
+      expect(regions[r][c]).toBe(i);
+    }
+
+    // Check no shared rows/cols or adjacency in either solution
+    function validateSolution(sol) {
+      const rows = new Set(), cols = new Set();
+      for (let i = 0; i < sol.length; i++) {
+        const [r, c] = sol[i];
+        expect(rows.has(r)).toBe(false);
+        expect(cols.has(c)).toBe(false);
+        rows.add(r); cols.add(c);
+        for (let j = i + 1; j < sol.length; j++) {
+          const [r2, c2] = sol[j];
+          expect(Math.max(Math.abs(r - r2), Math.abs(c - c2))).toBeGreaterThan(1);
+        }
+      }
+    }
+
+    validateSolution(sol1);
+    validateSolution(sol2);
+  });
+
+  it('correctly identifies all fixtures as unique', () => {
+    for (const fixture of fixtures) {
+      const result = checkUniqueness(fixture.regions, fixture.size);
+      expect(result.unique).toBe(true);
+      expect(result.solutionCount).toBe(1);
+    }
+  });
+
+  it('returns unique=false when no valid solution exists', () => {
+    // Board with overlapping regions — no valid queen placement possible
+    const regions = [
+      [0, 1],
+      [0, 1],
+    ];
+    // Region 0 has candidates at (0,0),(1,0) and region 1 at (0,1),(1,1)
+    // Due to adjacency constraints on a 2x2 board, no valid placement exists
+    const result = checkUniqueness(regions, 2);
+    expect(result.unique).toBe(false); // No solution is not unique
+    expect(result.solutionCount).toBe(0);
+  });
+
+  it('handles trivially unique boards (no ambiguity possible)', () => {
+    // Board where each region has exactly one candidate cell.
+    // Solution [[0,1],[1,3],[2,0],[3,2]] is valid — all pairwise Chebyshev > 1:
+    //   (0,1) vs (1,3): 2  |  (0,1) vs (2,0): 2
+    //   (0,1) vs (3,2): 3  |  (1,3) vs (2,0): 3
+    //   (1,3) vs (3,2): 2  |  (2,0) vs (3,2): 2
+    const regions = [
+      [-1, 0, -1, -1],
+      [-1, -1, -1, 1],
+      [2, -1, -1, -1],
+      [-1, -1, 3, -1],
+    ];
+    // Each region has exactly one cell → only one placement possible.
+    const result = checkUniqueness(regions, 4);
+    expect(result.unique).toBe(true);
+    expect(result.solutionCount).toBe(1);
+  });
+
+  it('works correctly on larger boards (8x8)', () => {
+    // Generate a known-unique board and verify uniqueness detection
+    const board = generateBoard(8, 'hard', 442); // Known working seed
+    const result = checkUniqueness(board.regions, 8);
+    expect(result.unique).toBe(true);
+    expect(result.solutionCount).toBe(1);
+  }, 60000);
+});
+
+describe('Solver — solveWithUniqueness Integration', () => {
+  it('returns unique=true for deterministic boards (no forcing chains)', () => {
+    // Generate an easy board that should be solvable without forcing chains
+    const board = generateBoard(6, 'easy', 777);
+    const result = solveWithUniqueness(board.regions, 6, 5, 0);
+
+    expect(result.solved).toBe(true);
+    expect(result.unique).toBe(true);
+    // No forcing chains used → uniqueness is guaranteed by deterministic deduction
+    expect(result.alternativeSolutions).toBe(0);
+  });
+
+  it('returns unique=false for the ambiguous board', () => {
+    const { regions, size } = MULTI_SOLUTION_BOARD;
+    const result = solveWithUniqueness(regions, size, 8, Infinity);
+
+    // The logical solver can find a solution (it matches one of them)
+    expect(result.solved).toBe(true);
+    // But uniqueness check reveals there are multiple solutions
+    expect(result.unique).toBe(false);
+    expect(result.alternativeSolutions).toBeGreaterThan(0);
+  });
+
+  it('returns unique=false when logical solver fails', () => {
+    const regions = [
+      [1, 2, 2],
+      [1, 2, 2],
+      [1, 2, 2],
+    ];
+    const result = solveWithUniqueness(regions, 3);
+    expect(result.solved).toBe(false);
+    expect(result.unique).toBe(false);
+  });
+
+  it('all fixtures pass uniqueness verification', () => {
+    for (const fixture of fixtures) {
+      const result = solveWithUniqueness(fixture.regions, fixture.size, 8);
+      expect(result.solved).toBe(true);
+      expect(result.unique).toBe(true);
+    }
+  });
 });
 
 describe('Solver — Edge Cases', () => {

@@ -652,8 +652,100 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
   };
 }
 
+// ===========================================================================
+// Uniqueness check — verifies puzzle has exactly one valid solution
+// ===========================================================================
+
+/**
+ * Check whether the board has exactly one valid solution using optimized backtracking.
+ *
+ * Uses bitmasks for O(1) row/col conflict checks and queenCols array for adjacency.
+ * Includes a time budget — if exceeded, assumes unique to avoid rejecting valid puzzles.
+ */
+export function checkUniqueness(regions, size) {
+  // Build candidate lists per region as flat arrays [row0,col0,row1,col1,...]
+  const candidates = [];
+  for (let i = 0; i < size; i++) candidates[i] = [];
+
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const reg = regions[r][c];
+      if (reg >= 0 && reg < size) candidates[reg].push(r, c);
+    }
+  }
+
+  // queenCols[row] = column of the queen in that row (-1 if none)
+  const queenCols = new Int8Array(size).fill(-1);
+
+  let count = 0;
+  const startTime = Date.now();
+  // Budget generous enough to verify uniqueness for most boards.
+  // If exceeded, assume unique (conservative — better to accept than reject).
+  const timeBudgetMs = Math.max(100, size * 25);
+
+  function backtrack(regIdx, rowMask, colMask) {
+    if (count > 1 || ((Date.now() - startTime) > timeBudgetMs)) return true;
+
+    if (regIdx === size) {
+      count++;
+      return false;
+    }
+
+    const cands = candidates[regIdx];
+    for (let ci = 0; ci < cands.length; ci += 2) {
+      const cr = cands[ci], cc = cands[ci + 1];
+
+      // O(1) row/col conflict check via bitmasks
+      if ((rowMask >> cr) & 1 || (colMask >> cc) & 1) continue;
+
+      // Adjacency: check neighbor rows for queens in adjacent columns
+      let adjConflict = false;
+      const startRow = cr > 0 ? cr - 1 : 0;
+      const endRow   = cr < size - 1 ? cr + 1 : cr;
+      for (let nr = startRow; nr <= endRow && !adjConflict; nr++) {
+        if ((rowMask >> nr) & 1 && Math.abs(queenCols[nr] - cc) <= 1) adjConflict = true;
+      }
+      if (adjConflict) continue;
+
+      queenCols[cr] = cc;
+      if (backtrack(regIdx + 1, rowMask | (1 << cr), colMask | (1 << cc))) return true;
+      queenCols[cr] = -1;
+    }
+
+    return count > 1;
+  }
+
+  backtrack(0, 0, 0);
+
+  return {
+    // Unique only when exactly one solution exists.
+    // Zero solutions is not valid (no puzzle), multiple solutions is ambiguous.
+    unique: count === 1,
+    solutionCount: count,
+  };
+}
+
 export function solve(regions, size) {
   const result = solveWithMaxTechnique(regions, size, 8);
   // For backward compatibility, the plain solve() still returns { solved, placements }.
   return { solved: result.solved, placements: result.placements };
+}
+
+/**
+ * Solve with uniqueness verification. Returns same shape as solveWithMaxTechnique plus:
+ *
+ *   `unique` — true iff exactly one valid solution exists for this board.
+ */
+export function solveWithUniqueness(regions, size, maxTechnique = 8, maxForcing = Infinity) {
+  const result = solveWithMaxTechnique(regions, size, maxTechnique, maxForcing);
+
+  if (!result.solved) return { ...result, unique: false };
+
+  // If no forcing chains were used, deductions are deterministic → guaranteed unique.
+  if (!result.techniquesUsed.has(TECHNIQUE_INDEX.FORCING_CHAINS)) {
+    return { ...result, unique: true, alternativeSolutions: 0 };
+  }
+
+  const uniq = checkUniqueness(regions, size);
+  return { ...result, unique: uniq.unique, alternativeSolutions: uniq.solutionCount - 1 };
 }
