@@ -1,6 +1,6 @@
 // Main — Entry point for Queendom. Wires game engine to renderer.
 
-import { createGame, placeQueen, toggleMark, pauseTimer, resumeTimer, tickTimer, newGame, Status, formatTimer } from './engine.js';
+import { createGame, placeQueen, toggleMark, resetMarks, pauseTimer, resumeTimer, tickTimer, newGame, Status, formatTimer } from './engine.js';
 import { Renderer } from './renderer.js';
 
 let game;
@@ -89,6 +89,7 @@ function init() {
   document.getElementById('btn-new-game').addEventListener('click', startNewGame);
   document.getElementById('btn-pause').addEventListener('click', togglePause);
   document.getElementById('btn-resume').addEventListener('click', resumeFromPause);
+  document.getElementById('btn-reset-marks').addEventListener('click', resetAllMarks);
   document.getElementById('btn-retry').addEventListener('click', startNewGame);
 
   sizeSelect.addEventListener('change', startNewGame);
@@ -222,6 +223,16 @@ function resumeFromPause() {
   document.getElementById('pause-overlay').className = 'overlay hidden';
   document.getElementById('btn-pause').textContent = 'Pause';
   renderer.render(); // Re-render to remove pause obscuring
+}
+
+function resetAllMarks() {
+  if (!game || game.status !== Status.PLAYING) return;
+
+  const hadMarks = game.marks.size > 0;
+  resetMarks(game);
+  if (hadMarks) {
+    renderer.render();
+  }
 }
 
 function hideAllOverlays() {

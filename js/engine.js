@@ -201,6 +201,21 @@ export function newGame(size, difficulty = 'hard', seed = null) {
 }
 
 /**
+ * Clear all player X marks from the board (keeps DEAD/incorrect marks).
+ *
+ * @param {GameState} game
+ */
+export function resetMarks(game) {
+  if (game.status !== Status.PLAYING) return;
+
+  for (const [key, mark] of game.marks) {
+    if (mark === Mark.X) {
+      game.marks.delete(key);
+    }
+  }
+}
+
+/**
  * Get the mark at a cell, or Mark.NONE if none.
  *
  * @returns {string}

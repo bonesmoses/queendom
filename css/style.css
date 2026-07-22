@@ -84,6 +84,19 @@ button:active {
   box-shadow: 0 4px 12px rgba(168,237,234,0.4);
 }
 
+#btn-reset-marks {
+  background: linear-gradient(135deg, #a8edea, #fed6e3);
+  color: #333;
+  box-shadow: 0 4px 12px rgba(168,237,234,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#btn-reset-marks svg {
+  stroke: currentColor;
+}
+
 #status-bar {
   display: flex;
   justify-content: center;
