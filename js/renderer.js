@@ -129,6 +129,11 @@ export class Renderer {
       const cell = e.target.closest('.cell');
       if (!cell || !cell.parentElement) return;
 
+      // Only enter/continue drag mode when a mousedown has established a start cell.
+      // Without this guard, hovering over cells would activate drag mode since
+      // undefined !== number always returns false for the === check below.
+      if (this._dragStartRow == null) return;
+
       const r = parseInt(cell.dataset.row);
       const c = parseInt(cell.dataset.col);
 
