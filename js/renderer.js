@@ -45,8 +45,9 @@ export class Renderer {
     this.cellEls = [];
     this.clickTimers = {}; // { [cellKey]: { status: 'pending'|'dbl', timerId?: number } }
                             // Stores timeout IDs alongside markers so they can be cleared properly.
-    this._dragging = false;  // is the user currently drag-toggling marks?
-    this._dragToggled = new Set(); // cells already toggled in current drag stroke
+    this._dragging = false;        // is the user currently drag-toggling marks?
+    this._strokeToggled = new Set(); // cells toggled in current drag stroke (prevents double-toggle)
+    this._recentDragKeys = new Set();  // cells dragged over recently (blocks click timeout undo)
     this._init();
   }
 
@@ -59,7 +60,10 @@ export class Renderer {
     // single-click callbacks firing on unrelated cells of the new board.
     Object.values(this.clickTimers).forEach(t => { if (t?.timerId != null) clearTimeout(t.timerId); });
     this.clickTimers = {};
-    this._dragToggled.clear();
+    this._strokeToggled.clear();
+    this._recentDragKeys.clear();
+    this._dragStartRow = undefined;
+    this._dragStartCol = undefined;
     this.container.innerHTML = '';
     this.boardEl = document.createElement('div');
     this.boardEl.className = 'board';
@@ -103,52 +107,84 @@ export class Renderer {
   _attachClickHandlers() {
     const CLICK_DELAY = 200; // ms to wait before treating as single click
 
-    // Click-and-drag for mark toggling: mousedown starts, mouseleave/mouseup ends.
+    // --- Click-and-drag for mark toggling ---
+
+    // Track where mousedown started so we can detect real dragging.
+    this._dragStartRow = undefined;
+    this._dragStartCol = undefined;
+
+    // mousedown: track the start cell and enable drag mode.
     this.boardEl.addEventListener('mousedown', (e) => {
       const cell = e.target.closest('.cell');
       if (!cell || e.button !== 0) return; // only left button
 
-      const r = parseInt(cell.dataset.row);
-      const c = parseInt(cell.dataset.col);
-
-      this._dragging = true;
-      this._onSingleClick(r, c);
+      this._dragStartRow = parseInt(cell.dataset.row);
+      this._dragStartCol = parseInt(cell.dataset.col);
     });
 
-    document.addEventListener('mouseup', () => { this._dragging = false; });
-
-    this.boardEl.addEventListener('mouseleave', (e) => {
-      if (this._dragging && e.relatedTarget !== null) {
-        // Dragging left the board — cancel any pending single-click timers
-        Object.values(this.clickTimers).forEach(t => { if (t?.timerId != null) clearTimeout(t.timerId); });
-        this.clickTimers = {};
-      }
-    });
-
-    // Track which cells we've already toggled during the current drag to avoid
-    // double-toggling when the user drags back over a cell.
-    let _dragToggled = new Set();
-
-    this.boardEl.addEventListener('mouseover', (e) => {
-      if (!this._dragging) return;
+    // mousemove: detect actual dragging (cursor moved to a different cell from mousedown target).
+    // On first real movement, toggle the start cell and current cell.
+    // During ongoing drag, toggle each new cell entered.
+    this.boardEl.addEventListener('mousemove', (e) => {
       const cell = e.target.closest('.cell');
-      if (!cell) return;
+      if (!cell || !cell.parentElement) return;
 
       const r = parseInt(cell.dataset.row);
       const c = parseInt(cell.dataset.col);
-      const key = cellKey(r, c);
 
-      // Skip cells we've already toggled in this drag stroke
-      if (_dragToggled.has(key)) return;
-      _dragToggled.add(key);
+      // Only start drag when we've moved to a different cell from mousedown target.
+      if (r === this._dragStartRow && c === this._dragStartCol) return;
 
-      // Cancel any pending single-click timer for this cell (the user is dragging, not clicking)
-      if (this.clickTimers[key]) {
-        clearTimeout(this.clickTimers[key].timerId);
-        delete this.clickTimers[key];
+      // First time detecting drag: toggle the start cell now.
+      if (!this._dragging) {
+        this._dragging = true;
+
+        const startKey = cellKey(this._dragStartRow, this._dragStartCol);
+        if (!this._strokeToggled.has(startKey)) {
+          this._strokeToggled.add(startKey);
+          this._recentDragKeys.add(startKey);
+          this._onSingleClick(this._dragStartRow, this._dragStartCol);
+        }
       }
 
-      this._onSingleClick(r, c);
+      // Toggle current cell (first time in this stroke).
+      const key = cellKey(r, c);
+      if (!this._strokeToggled.has(key)) {
+        this._strokeToggled.add(key);
+        this._recentDragKeys.add(key);
+        this._onSingleClick(r, c);
+      }
+    });
+
+    // mouseup on document: end drag, cancel pending timers, schedule clearing of recent keys.
+    const onMouseUp = () => {
+      if (this._dragging) {
+        Object.values(this.clickTimers).forEach(t => {
+          if (t?.timerId != null) clearTimeout(t.timerId);
+        });
+        this.clickTimers = {};
+
+        // Keep _recentDragKeys around briefly so click timeout callbacks can check it.
+        // Click's timer fires after CLICK_DELAY=200ms, give a bit of headroom.
+        setTimeout(() => { this._recentDragKeys.clear(); }, 300);
+
+        this._strokeToggled.clear();
+      }
+      this._dragging = false;
+      this._dragStartRow = undefined;
+      this._dragStartCol = undefined;
+    };
+    document.addEventListener('mouseup', onMouseUp);
+
+    // mouseleave: cancel pending timers if dragging off the board without a proper mouseup.
+    this.boardEl.addEventListener('mouseleave', () => {
+      if (this._dragging) {
+        Object.values(this.clickTimers).forEach(t => {
+          if (t?.timerId != null) clearTimeout(t.timerId);
+        });
+        this.clickTimers = {};
+        this._strokeToggled.clear();
+      }
     });
 
     this.boardEl.addEventListener('click', (e) => {
@@ -165,9 +201,12 @@ export class Renderer {
         return;
       }
 
-      // Set a timer: if no second click arrives, treat as single click
+      // Set a timer: if no second click arrives, treat as single click.
       const timerId = setTimeout(() => {
         if (this.clickTimers[key] && this.clickTimers[key].status === 'pending') {
+          // If this cell was part of a recent drag, skip toggle — don't undo what dragging set.
+          if (this._recentDragKeys.has(key)) return;
+
           delete this.clickTimers[key];
           this._onSingleClick(r, c);
         }
