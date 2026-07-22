@@ -511,7 +511,7 @@ export function applyForcingChains(state) {
       let cChanged = false;
       for (const fn of [applyNakedSingles, applyHiddenSingles, applyRowColIntersection]) {
         const r = fn(clone);
-        cChanged = r.changed;
+        if (r.changed) cChanged = r.changed;
         if (r.contradiction) break;
       }
       stalled = !cChanged;
