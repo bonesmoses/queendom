@@ -45,6 +45,8 @@ export class Renderer {
     this.cellEls = [];
     this.clickTimers = {}; // { [cellKey]: { status: 'pending'|'dbl', timerId?: number } }
                             // Stores timeout IDs alongside markers so they can be cleared properly.
+    this._dragging = false;  // is the user currently drag-toggling marks?
+    this._dragToggled = new Set(); // cells already toggled in current drag stroke
     this._init();
   }
 
@@ -57,6 +59,7 @@ export class Renderer {
     // single-click callbacks firing on unrelated cells of the new board.
     Object.values(this.clickTimers).forEach(t => { if (t?.timerId != null) clearTimeout(t.timerId); });
     this.clickTimers = {};
+    this._dragToggled.clear();
     this.container.innerHTML = '';
     this.boardEl = document.createElement('div');
     this.boardEl.className = 'board';
@@ -99,6 +102,54 @@ export class Renderer {
 
   _attachClickHandlers() {
     const CLICK_DELAY = 200; // ms to wait before treating as single click
+
+    // Click-and-drag for mark toggling: mousedown starts, mouseleave/mouseup ends.
+    this.boardEl.addEventListener('mousedown', (e) => {
+      const cell = e.target.closest('.cell');
+      if (!cell || e.button !== 0) return; // only left button
+
+      const r = parseInt(cell.dataset.row);
+      const c = parseInt(cell.dataset.col);
+
+      this._dragging = true;
+      this._onSingleClick(r, c);
+    });
+
+    document.addEventListener('mouseup', () => { this._dragging = false; });
+
+    this.boardEl.addEventListener('mouseleave', (e) => {
+      if (this._dragging && e.relatedTarget !== null) {
+        // Dragging left the board — cancel any pending single-click timers
+        Object.values(this.clickTimers).forEach(t => { if (t?.timerId != null) clearTimeout(t.timerId); });
+        this.clickTimers = {};
+      }
+    });
+
+    // Track which cells we've already toggled during the current drag to avoid
+    // double-toggling when the user drags back over a cell.
+    let _dragToggled = new Set();
+
+    this.boardEl.addEventListener('mouseover', (e) => {
+      if (!this._dragging) return;
+      const cell = e.target.closest('.cell');
+      if (!cell) return;
+
+      const r = parseInt(cell.dataset.row);
+      const c = parseInt(cell.dataset.col);
+      const key = cellKey(r, c);
+
+      // Skip cells we've already toggled in this drag stroke
+      if (_dragToggled.has(key)) return;
+      _dragToggled.add(key);
+
+      // Cancel any pending single-click timer for this cell (the user is dragging, not clicking)
+      if (this.clickTimers[key]) {
+        clearTimeout(this.clickTimers[key].timerId);
+        delete this.clickTimers[key];
+      }
+
+      this._onSingleClick(r, c);
+    });
 
     this.boardEl.addEventListener('click', (e) => {
       const cell = e.target.closest('.cell');
@@ -149,6 +200,8 @@ export class Renderer {
     this.renderCell(row, col);
     this._updateOverlays();
   }
+
+
 
   _onDoubleClick(row, col) {
     // Ignore double-click on cells that already have a queen
