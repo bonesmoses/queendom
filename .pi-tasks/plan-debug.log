@@ -1,0 +1,7 @@
+2026-07-22T17:13:57.231Z requirement extraction: 2 grounded requirement(s) kept
+2026-07-22T17:14:23.040Z decompose fidelity: 2/5 titles cited a grounded source; 0 restoration(s)
+2026-07-22T17:14:23.040Z decompose produced 5 title(s)
+2026-07-22T17:15:30.762Z decompose-coverage: COMPLETE — every grounded requirement is task-mapped or cross-cutting
+2026-07-22T17:15:30.762Z coverage-map (5 titles): 1 task-mapped, 1 cross-cutting, 0 unmapped; 2 requirement(s) title-grounded
+2026-07-22T17:15:37.066Z contract extraction: 1 grounded contract(s) kept from 1 emitted
+2026-07-22T17:15:42.553Z launch-contract extraction: 0 grounded script(s) kept from 0 emitted
