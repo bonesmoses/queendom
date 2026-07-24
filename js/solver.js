@@ -25,16 +25,20 @@ export function createSolverState(regions, size) {
       if (reg >= 0 && reg < numRegions) candidates[reg].add(cellKey(r, c));
     }
   }
-  return { size, regions, candidates, placed: new Map() };
+  // Total candidate count — decremented incrementally on every successful .delete().
+  let totalCandidates = 0;
+  for (const set of candidates) totalCandidates += set.size;
+  return { size, regions, candidates, placed: new Map(), totalCandidates };
 }
 
 function cloneState(s) {
   // regions: deep clone (array of arrays)
   // candidates: deep clone (Set → new Set)
   // placed: shallow copy is safe — values are primitive cell keys
+  // Regions are never mutated during solving — share the reference to save allocations.
   return {
     size: s.size,
-    regions: s.regions.map(r => [...r]),
+    regions: s.regions,
     candidates: s.candidates.map(set => new Set(set)),
     placed: new Map(s.placed),
   };
@@ -78,7 +82,7 @@ export function incrementalEliminate(state, newPlacements) {
     const [pr, pc] = cellPos(cell);
     // Same region — keep only this cell
     for (const key of [...state.candidates[regId]]) {
-      if (key !== cell && state.candidates[regId].delete(key)) changed = true;
+      if (key !== cell && state.candidates[regId].delete(key)) { changed = true; state.totalCandidates--; }
     }
     // Other regions — eliminate row, col, adjacent
     for (let other = 0; other < state.size; other++) {
@@ -86,7 +90,7 @@ export function incrementalEliminate(state, newPlacements) {
       for (const key of [...state.candidates[other]]) {
         const [cr, cc] = cellPos(key);
         if (cr === pr || cc === pc || Math.max(Math.abs(cr - pr), Math.abs(cc - pc)) <= 1) {
-          if (state.candidates[other].delete(key)) changed = true;
+          if (state.candidates[other].delete(key)) { changed = true; state.totalCandidates--; }
         }
       }
     }
@@ -184,7 +188,7 @@ export function applyRegionConfinement(state) {
       for (let other = 0; other < state.size; other++) {
         if (other === regId || state.placed.has(other)) continue;
         for (const key of getCandsInRow(state.candidates[other], r)) {
-          if (state.candidates[other].delete(key)) changed = true;
+          if (state.candidates[other].delete(key)) { changed = true; state.totalCandidates--; }
         }
       }
     }
@@ -194,7 +198,7 @@ export function applyRegionConfinement(state) {
       for (let other = 0; other < state.size; other++) {
         if (other === regId || state.placed.has(other)) continue;
         for (const key of getCandsInCol(state.candidates[other], c)) {
-          if (state.candidates[other].delete(key)) changed = true;
+          if (state.candidates[other].delete(key)) { changed = true; state.totalCandidates--; }
         }
       }
     }
@@ -262,7 +266,7 @@ export function applyPigeonhole(state) {
         for (const entry of rowCands[r]) {
           if (state.placed.has(entry.regId) || regSet.has(entry.regId)) continue;
           const cands = state.candidates[entry.regId];
-          if (cands && cands.delete(entry.key)) changed = true;
+          if (cands && cands.delete(entry.key)) { changed = true; state.totalCandidates--; }
         }
       }
     }
@@ -285,7 +289,7 @@ export function applyPigeonhole(state) {
         for (const entry of colCands[c]) {
           if (state.placed.has(entry.regId) || regSet.has(entry.regId)) continue;
           const cands = state.candidates[entry.regId];
-          if (cands && cands.delete(entry.key)) changed = true;
+          if (cands && cands.delete(entry.key)) { changed = true; state.totalCandidates--; }
         }
       }
     }
@@ -315,7 +319,7 @@ export function applyPigeonhole(state) {
       for (const key of sharedCells) {
         for (let regId = 0; regId < state.size; regId++) {
           if (state.placed.has(regId) || regs1.has(regId)) continue;
-          if (state.candidates[regId].delete(key)) changed = true;
+          if (state.candidates[regId].delete(key)) { changed = true; state.totalCandidates--; }
         }
       }
     }
@@ -374,7 +378,7 @@ export function applyAdjacencyBlocking(state) {
         if (!hasCand) { wouldContradict = true; break; }
       }
 
-      if (wouldContradict && state.candidates[regId].delete(candKey)) changed = true;
+      if (wouldContradict && state.candidates[regId].delete(candKey)) { changed = true; state.totalCandidates--; }
     }
   }
 
@@ -497,7 +501,7 @@ export function applyForcingChains(state) {
 
     // Rapid contradiction check (Opt 2 #2): exit immediately if basic elim creates a contradiction.
     if (isContradiction(clone)) {
-      if (state.candidates[bestReg].delete(candKey)) changed = true;
+      if (state.candidates[bestReg].delete(candKey)) { changed = true; state.totalCandidates--; }
       continue;
     }
 
@@ -517,7 +521,7 @@ export function applyForcingChains(state) {
       stalled = !cChanged;
     }
 
-    if (isContradiction(clone) && state.candidates[bestReg].delete(candKey)) changed = true;
+    if (isContradiction(clone) && state.candidates[bestReg].delete(candKey)) { changed = true; state.totalCandidates--; }
   }
 
   return { changed, contradiction: isContradiction(state) };
@@ -599,16 +603,13 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
       if (ti === TECHNIQUE_INDEX.FORCING_CHAINS && forcingUsed >= maxForcing) continue;
 
       const placedBefore = state.placed.size;
-      let totalCandidatesBefore = 0;
-      for (const c of state.candidates) totalCandidatesBefore += c.size;
+      const totalCandidatesBefore = state.totalCandidates;
       const result = TECHNIQUES[ti](state);
       if (ti === TECHNIQUE_INDEX.FORCING_CHAINS) forcingUsed++;
       if (result.changed) {
         anyChanged = true;
         techniquesUsed.add(ti);
-        let totalCandidatesAfter = 0;
-        for (const c of state.candidates) totalCandidatesAfter += c.size;
-        const eliminationsByThisTech = totalCandidatesBefore - totalCandidatesAfter;
+        const eliminationsByThisTech = totalCandidatesBefore - state.totalCandidates;
         const prev = techniqueStats.get(ti) || { placements: 0, eliminations: 0 };
         techniqueStats.set(ti, {
           placements: prev.placements + (state.placed.size - placedBefore),
@@ -636,7 +637,6 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
   }
   // Sort by candidate count — regions with the most candidates are the hardest
   unplaced.sort((a, b) => b.candidates - a.candidates);
-  const totalCandidates = unplaced.reduce((sum, r) => sum + r.candidates, 0);
 
   return {
     solved: false,
@@ -646,7 +646,7 @@ export function solveWithMaxTechnique(regions, size, maxTechnique = 8, maxForcin
       placed: state.placed.size,
       totalRegions: state.size,
       stuckRegions: unplaced,       // [{ regionId, candidates }, ...]
-      totalCandidates,              // sum of all remaining candidates
+      totalCandidates: state.totalCandidates,  // maintained incrementally
       contradiction: isContradiction(state),  // true = impossible constraint
     }
   };
