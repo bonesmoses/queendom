@@ -57,17 +57,18 @@ function isContradiction(s) {
 }
 
 // ===========================================================================
-// Helper: get cells in a region's candidates that lie on a specific row/col
+// Helper: get cells in a region's candidates that lie on a specific row/col.
+// Inlines coordinate unpacking from key (r*100+c) to avoid cellPos() call overhead.
 // ===========================================================================
 function getCandsInRow(cands, r) {
   const result = [];
-  for (const key of cands) { const [cr] = cellPos(key); if (cr === r) result.push(key); }
+  for (const key of cands) { if ((key / 100 | 0) === r) result.push(key); }
   return result;
 }
 
 function getCandsInCol(cands, c) {
   const result = [];
-  for (const key of cands) { const [, cc] = cellPos(key); if (cc === c) result.push(key); }
+  for (const key of cands) { if (key % 100 === c) result.push(key); }
   return result;
 }
 
