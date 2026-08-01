@@ -11,3 +11,4 @@
 # Agent stuff
 /.claude/
 /.pi-subagents/
+/.pi-tasks/
